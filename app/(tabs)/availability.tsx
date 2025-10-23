@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -28,11 +28,7 @@ export default function AvailabilityScreen() {
   const [availability, setAvailability] = useState<AvailabilityDay[]>([]);
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const userData = await getUser();
     setUser(userData);
 
@@ -54,7 +50,11 @@ export default function AvailabilityScreen() {
 
     setSelectedDates(marked);
     console.log('Loaded availability and requests');
-  };
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleDayPress = (day: DateData) => {
     const dateStr = day.dateString;

@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,9 +18,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
-  interpolate,
-  Extrapolate,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 
@@ -52,7 +49,11 @@ export default function FloatingTabBar({
 
   const activeIndex = tabs.findIndex(tab => pathname.includes(tab.route));
   const indicatorPosition = useSharedValue(activeIndex >= 0 ? activeIndex : 0);
-  const tabScales = tabs.map(() => useSharedValue(1));
+  
+  // Create all tab scale shared values at the top level
+  const tabScales = useMemo(() => {
+    return tabs.map(() => useSharedValue(1));
+  }, [tabs.length]);
 
   useEffect(() => {
     const newIndex = tabs.findIndex(tab => pathname.includes(tab.route));
@@ -62,7 +63,7 @@ export default function FloatingTabBar({
         stiffness: 120,
       });
     }
-  }, [pathname]);
+  }, [pathname, tabs, indicatorPosition]);
 
   const handleTabPress = (route: string, index: number) => {
     // Haptic feedback
@@ -92,6 +93,15 @@ export default function FloatingTabBar({
       ],
     };
   });
+
+  // Create all animated tab styles at the top level
+  const animatedTabStyles = useMemo(() => {
+    return tabs.map((_, index) => {
+      return useAnimatedStyle(() => ({
+        transform: [{ scale: tabScales[index].value }],
+      }));
+    });
+  }, [tabs.length, tabScales]);
 
   return (
     <SafeAreaView
@@ -129,13 +139,9 @@ export default function FloatingTabBar({
               />
               {tabs.map((tab, index) => {
                 const isActive = pathname.includes(tab.route);
-                
-                const animatedTabStyle = useAnimatedStyle(() => ({
-                  transform: [{ scale: tabScales[index].value }],
-                }));
 
                 return (
-                  <Animated.View key={tab.name} style={[styles.tab, animatedTabStyle]}>
+                  <Animated.View key={tab.name} style={[styles.tab, animatedTabStyles[index]]}>
                     <TouchableOpacity
                       style={styles.tabButton}
                       onPress={() => handleTabPress(tab.route, index)}
@@ -194,13 +200,9 @@ export default function FloatingTabBar({
             />
             {tabs.map((tab, index) => {
               const isActive = pathname.includes(tab.route);
-              
-              const animatedTabStyle = useAnimatedStyle(() => ({
-                transform: [{ scale: tabScales[index].value }],
-              }));
 
               return (
-                <Animated.View key={tab.name} style={[styles.tab, animatedTabStyle]}>
+                <Animated.View key={tab.name} style={[styles.tab, animatedTabStyles[index]]}>
                   <TouchableOpacity
                     style={styles.tabButton}
                     onPress={() => handleTabPress(tab.route, index)}
