@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useTheme } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
+import { colors, darkColors } from '@/styles/commonStyles';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -36,13 +37,15 @@ interface FloatingTabBarProps {
 
 export default function FloatingTabBar({
   tabs,
-  containerWidth = Dimensions.get('window').width - 48,
-  borderRadius = 24,
+  containerWidth = Dimensions.get('window').width - 40,
+  borderRadius = 28,
   bottomMargin = 16,
 }: FloatingTabBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const theme = useTheme();
+  const isDark = theme.dark;
+  const currentColors = isDark ? darkColors : colors;
 
   const activeIndex = tabs.findIndex(tab => pathname.includes(tab.route));
   const indicatorPosition = useSharedValue(activeIndex >= 0 ? activeIndex : 0);
@@ -50,8 +53,8 @@ export default function FloatingTabBar({
   const handleTabPress = (route: string) => {
     const newIndex = tabs.findIndex(tab => tab.route === route);
     indicatorPosition.value = withSpring(newIndex, {
-      damping: 20,
-      stiffness: 90,
+      damping: 18,
+      stiffness: 100,
     });
     router.push(route as any);
   };
@@ -78,14 +81,29 @@ export default function FloatingTabBar({
     >
       <View style={[styles.container, { width: containerWidth, borderRadius }]}>
         {Platform.OS === 'ios' ? (
-          <BlurView intensity={80} tint={theme.dark ? 'dark' : 'light'} style={styles.blur}>
-            <View style={[styles.content, { backgroundColor: theme.dark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)' }]}>
+          <BlurView 
+            intensity={90} 
+            tint={isDark ? 'dark' : 'light'} 
+            style={[styles.blur, { borderRadius }]}
+          >
+            <View style={[
+              styles.content, 
+              { 
+                backgroundColor: isDark 
+                  ? 'rgba(37, 37, 37, 0.85)' 
+                  : 'rgba(255, 255, 255, 0.85)',
+                borderWidth: 1,
+                borderColor: isDark 
+                  ? 'rgba(255, 255, 255, 0.08)' 
+                  : 'rgba(45, 45, 45, 0.06)',
+              }
+            ]}>
               <Animated.View
                 style={[
                   styles.indicator,
                   {
-                    width: containerWidth / tabs.length,
-                    backgroundColor: theme.colors.primary,
+                    width: (containerWidth - 16) / tabs.length - 8,
+                    backgroundColor: currentColors.sage,
                   },
                   indicatorStyle,
                 ]}
@@ -101,15 +119,15 @@ export default function FloatingTabBar({
                   >
                     <IconSymbol
                       name={tab.icon}
-                      size={24}
-                      color={isActive ? theme.colors.primary : theme.colors.text}
+                      size={22}
+                      color={isActive ? currentColors.text : currentColors.textSecondary}
                     />
                     <Text
                       style={[
                         styles.label,
                         {
-                          color: isActive ? theme.colors.primary : theme.colors.text,
-                          fontWeight: isActive ? '700' : '500',
+                          color: isActive ? currentColors.text : currentColors.textSecondary,
+                          fontWeight: isActive ? '600' : '500',
                         },
                       ]}
                     >
@@ -121,13 +139,20 @@ export default function FloatingTabBar({
             </View>
           </BlurView>
         ) : (
-          <View style={[styles.content, { backgroundColor: theme.colors.card }]}>
+          <View style={[
+            styles.content, 
+            { 
+              backgroundColor: currentColors.card,
+              borderWidth: 1,
+              borderColor: currentColors.border,
+            }
+          ]}>
             <Animated.View
               style={[
                 styles.indicator,
                 {
-                  width: containerWidth / tabs.length,
-                  backgroundColor: theme.colors.primary,
+                  width: (containerWidth - 16) / tabs.length - 8,
+                  backgroundColor: currentColors.sage,
                 },
                 indicatorStyle,
               ]}
@@ -143,15 +168,15 @@ export default function FloatingTabBar({
                 >
                   <IconSymbol
                     name={tab.icon}
-                    size={24}
-                    color={isActive ? theme.colors.primary : theme.colors.text}
+                    size={22}
+                    color={isActive ? currentColors.text : currentColors.textSecondary}
                   />
                   <Text
                     style={[
                       styles.label,
                       {
-                        color: isActive ? theme.colors.primary : theme.colors.text,
-                        fontWeight: isActive ? '700' : '500',
+                        color: isActive ? currentColors.text : currentColors.textSecondary,
+                        fontWeight: isActive ? '600' : '500',
                       },
                     ]}
                   >
@@ -178,34 +203,36 @@ const styles = StyleSheet.create({
   },
   container: {
     overflow: 'hidden',
-    boxShadow: '0px 8px 32px rgba(0, 0, 0, 0.15)',
-    elevation: 8,
+    boxShadow: '0px 8px 32px rgba(45, 45, 45, 0.12)',
+    elevation: 6,
   },
   blur: {
     overflow: 'hidden',
-    borderRadius: 24,
   },
   content: {
     flexDirection: 'row',
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 8,
     position: 'relative',
+    borderRadius: 28,
   },
   indicator: {
     position: 'absolute',
-    height: '80%',
-    top: '10%',
-    borderRadius: 16,
-    opacity: 0.15,
+    height: '75%',
+    top: '12.5%',
+    left: 12,
+    borderRadius: 20,
+    opacity: 0.2,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 10,
     gap: 4,
   },
   label: {
-    fontSize: 11,
+    fontSize: 10,
+    letterSpacing: 0.2,
   },
 });

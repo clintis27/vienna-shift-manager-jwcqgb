@@ -1,5 +1,9 @@
 
-import React, { useState } from 'react';
+import { IconSymbol } from '@/components/IconSymbol';
+import { router } from 'expo-router';
+import { colors, darkColors, commonStyles, buttonStyles } from '@/styles/commonStyles';
+import { validateLogin } from '@/utils/mockData';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -12,23 +16,16 @@ import {
   ScrollView,
   useColorScheme,
 } from 'react-native';
-import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { IconSymbol } from '@/components/IconSymbol';
-import { colors, darkColors, commonStyles, buttonStyles } from '@/styles/commonStyles';
-import { validateLogin } from '@/utils/mockData';
 import { saveUser, setAuthenticated } from '@/utils/storage';
+import React, { useState } from 'react';
 
 export default function LoginScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const theme = isDark ? darkColors : colors;
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const colorScheme = useColorScheme();
+  const currentColors = colorScheme === 'dark' ? darkColors : colors;
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -37,47 +34,44 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
-    console.log('Attempting login...');
-
-    // Simulate API call
-    setTimeout(async () => {
-      const user = validateLogin(email, password);
-      
+    try {
+      const user = await validateLogin(email, password);
       if (user) {
         await saveUser(user);
         await setAuthenticated(true);
-        console.log('Login successful, navigating to home');
         router.replace('/(tabs)/(home)');
       } else {
-        Alert.alert('Login Failed', 'Invalid email or password');
+        Alert.alert('Error', 'Invalid email or password');
       }
-      
+    } catch (error) {
+      console.log('Login error:', error);
+      Alert.alert('Error', 'An error occurred during login');
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   const handleBiometricLogin = async () => {
     try {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!hasHardware) {
+        Alert.alert('Error', 'Biometric authentication is not available on this device');
+        return;
+      }
 
-      if (!hasHardware || !isEnrolled) {
-        Alert.alert(
-          'Biometric Not Available',
-          'Please set up biometric authentication on your device'
-        );
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!isEnrolled) {
+        Alert.alert('Error', 'No biometric data enrolled on this device');
         return;
       }
 
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Login with biometrics',
+        promptMessage: 'Authenticate to login',
         fallbackLabel: 'Use password',
       });
 
       if (result.success) {
-        console.log('Biometric authentication successful');
-        // For demo, use the first mock user
-        const user = validateLogin('employee@vienna.com', 'password123');
+        const user = await validateLogin('admin@hotel.com', 'admin123');
         if (user) {
           await saveUser(user);
           await setAuthenticated(true);
@@ -85,42 +79,50 @@ export default function LoginScreen() {
         }
       }
     } catch (error) {
-      console.error('Biometric authentication error:', error);
+      console.log('Biometric login error:', error);
       Alert.alert('Error', 'Biometric authentication failed');
     }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: currentColors.background }]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Logo/Header */}
+          {/* Header */}
           <View style={styles.header}>
-            <View style={[styles.logoContainer, { backgroundColor: theme.primary }]}>
-              <IconSymbol name="building.2" size={48} color={theme.card} />
+            <View style={[styles.logoContainer, { backgroundColor: currentColors.sage }]}>
+              <IconSymbol name="building.2.fill" size={40} color={currentColors.text} />
             </View>
-            <Text style={[styles.title, { color: theme.text }]}>
-              Hotel House of Vienna
+            <Text style={[styles.title, { color: currentColors.text }]}>
+              Welcome back
             </Text>
-            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-              Shift Manager
+            <Text style={[styles.subtitle, { color: currentColors.textSecondary }]}>
+              Sign in to continue to Hotel House of Vienna
             </Text>
           </View>
 
           {/* Login Form */}
           <View style={styles.form}>
             <View style={styles.inputContainer}>
-              <IconSymbol name="envelope" size={20} color={theme.textSecondary} />
+              <Text style={[styles.label, { color: currentColors.text }]}>Email</Text>
               <TextInput
-                style={[styles.input, { color: theme.text }]}
-                placeholder="Email"
-                placeholderTextColor={theme.textSecondary}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: currentColors.card,
+                    color: currentColors.text,
+                    borderColor: currentColors.border,
+                  }
+                ]}
+                placeholder="Enter your email"
+                placeholderTextColor={currentColors.textTertiary}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -130,66 +132,81 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <IconSymbol name="lock" size={20} color={theme.textSecondary} />
+              <Text style={[styles.label, { color: currentColors.text }]}>Password</Text>
               <TextInput
-                style={[styles.input, { color: theme.text }]}
-                placeholder="Password"
-                placeholderTextColor={theme.textSecondary}
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: currentColors.card,
+                    color: currentColors.text,
+                    borderColor: currentColors.border,
+                  }
+                ]}
+                placeholder="Enter your password"
+                placeholderTextColor={currentColors.textTertiary}
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry={!showPassword}
+                secureTextEntry
                 autoCapitalize="none"
+                autoCorrect={false}
               />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <IconSymbol
-                  name={showPassword ? 'eye.slash' : 'eye'}
-                  size={20}
-                  color={theme.textSecondary}
-                />
-              </TouchableOpacity>
             </View>
 
             <TouchableOpacity
-              style={[buttonStyles.primary, { backgroundColor: theme.primary }]}
+              style={[styles.loginButton, { backgroundColor: currentColors.sage }]}
               onPress={handleLogin}
               disabled={loading}
             >
-              <Text style={[buttonStyles.text, { color: theme.card }]}>
-                {loading ? 'Logging in...' : 'Login'}
+              <Text style={[styles.loginButtonText, { color: currentColors.text }]}>
+                {loading ? 'Signing in...' : 'Sign In'}
               </Text>
             </TouchableOpacity>
+
+            <View style={styles.divider}>
+              <View style={[styles.dividerLine, { backgroundColor: currentColors.border }]} />
+              <Text style={[styles.dividerText, { color: currentColors.textSecondary }]}>or</Text>
+              <View style={[styles.dividerLine, { backgroundColor: currentColors.border }]} />
+            </View>
 
             <TouchableOpacity
-              style={[styles.biometricButton, { borderColor: theme.border }]}
+              style={[
+                styles.biometricButton,
+                {
+                  backgroundColor: currentColors.card,
+                  borderColor: currentColors.border,
+                }
+              ]}
               onPress={handleBiometricLogin}
             >
-              <IconSymbol name="faceid" size={24} color={theme.primary} />
-              <Text style={[styles.biometricText, { color: theme.primary }]}>
-                Login with Biometrics
+              <IconSymbol name="faceid" size={24} color={currentColors.text} />
+              <Text style={[styles.biometricButtonText, { color: currentColors.text }]}>
+                Sign in with Face ID
               </Text>
             </TouchableOpacity>
+          </View>
 
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={[styles.footerText, { color: currentColors.textSecondary }]}>
+              Don&apos;t have an account?
+            </Text>
             <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-              <Text style={[styles.linkText, { color: theme.primary }]}>
-                Don&apos;t have an account? Register
+              <Text style={[styles.footerLink, { color: currentColors.sage }]}>
+                Sign Up
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* Demo Credentials */}
-          <View style={[styles.demoBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.demoTitle, { color: theme.text }]}>Demo Credentials:</Text>
-            <Text style={[styles.demoText, { color: theme.textSecondary }]}>
-              Admin: admin@vienna.com
+          <View style={[styles.demoCard, { backgroundColor: currentColors.card }]}>
+            <Text style={[styles.demoTitle, { color: currentColors.text }]}>
+              Demo Credentials
             </Text>
-            <Text style={[styles.demoText, { color: theme.textSecondary }]}>
-              Manager: manager@vienna.com
+            <Text style={[styles.demoText, { color: currentColors.textSecondary }]}>
+              Admin: admin@hotel.com / admin123
             </Text>
-            <Text style={[styles.demoText, { color: theme.textSecondary }]}>
-              Employee: employee@vienna.com
-            </Text>
-            <Text style={[styles.demoText, { color: theme.textSecondary }]}>
-              Password: any 6+ characters
+            <Text style={[styles.demoText, { color: currentColors.textSecondary }]}>
+              Employee: employee@hotel.com / emp123
             </Text>
           </View>
         </ScrollView>
@@ -212,79 +229,123 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 48,
   },
   logoContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: 'center',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'center',
+    marginBottom: 24,
+    boxShadow: '0px 8px 24px rgba(184, 197, 184, 0.3)',
+    elevation: 4,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
-    marginBottom: 4,
-    textAlign: 'center',
+    marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 18,
-    fontWeight: '500',
+    fontSize: 15,
+    textAlign: 'center',
+    letterSpacing: 0.1,
+    lineHeight: 22,
   },
   form: {
-    width: '100%',
-    marginBottom: 24,
+    marginBottom: 32,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    letterSpacing: 0.2,
   },
   input: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     fontSize: 16,
+    letterSpacing: 0.2,
+  },
+  loginButton: {
+    borderRadius: 20,
+    paddingVertical: 18,
+    alignItems: 'center',
+    marginTop: 8,
+    boxShadow: '0px 6px 20px rgba(184, 197, 184, 0.3)',
+    elevation: 3,
+  },
+  loginButtonText: {
+    fontSize: 17,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 28,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 13,
+    letterSpacing: 0.2,
   },
   biometricButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderRadius: 8,
-    paddingVertical: 12,
-    marginTop: 12,
-    marginBottom: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingVertical: 18,
   },
-  biometricText: {
+  biometricButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    marginLeft: 8,
+    letterSpacing: 0.2,
   },
-  linkText: {
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 24,
+  },
+  footerText: {
+    fontSize: 14,
+    letterSpacing: 0.1,
+  },
+  footerLink: {
     fontSize: 14,
     fontWeight: '600',
-    textAlign: 'center',
-    marginTop: 8,
+    letterSpacing: 0.2,
   },
-  demoBox: {
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
+  demoCard: {
+    borderRadius: 20,
+    padding: 20,
+    marginTop: 32,
+    boxShadow: '0px 4px 16px rgba(45, 45, 45, 0.04)',
+    elevation: 1,
   },
   demoTitle: {
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 12,
+    letterSpacing: 0.3,
   },
   demoText: {
-    fontSize: 12,
-    marginBottom: 4,
+    fontSize: 13,
+    marginBottom: 6,
+    letterSpacing: 0.1,
   },
 });

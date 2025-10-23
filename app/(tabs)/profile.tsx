@@ -1,5 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import { IconSymbol } from '@/components/IconSymbol';
+import { router } from 'expo-router';
+import { registerForPushNotificationsAsync } from '@/utils/notifications';
+import { colors, darkColors } from '@/styles/commonStyles';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -11,59 +15,45 @@ import {
   Platform,
   Switch,
 } from 'react-native';
-import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconSymbol } from '@/components/IconSymbol';
-import { colors, darkColors } from '@/styles/commonStyles';
-import { getUser, removeUser, setAuthenticated, clearAllData, saveUser } from '@/utils/storage';
-import { User, NotificationPreferences } from '@/types';
+import React, { useState, useEffect } from 'react';
 import { getCategoryName, getCategoryColor } from '@/utils/mockData';
-import { registerForPushNotificationsAsync } from '@/utils/notifications';
+import { User, NotificationPreferences } from '@/types';
+import { getUser, removeUser, setAuthenticated, clearAllData, saveUser } from '@/utils/storage';
 
 export default function ProfileScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const theme = isDark ? darkColors : colors;
-
   const [user, setUser] = useState<User | null>(null);
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>({
     shiftChanges: true,
     reminders: true,
     approvals: true,
-    pushEnabled: true,
   });
+  const colorScheme = useColorScheme();
+  const currentColors = colorScheme === 'dark' ? darkColors : colors;
 
   useEffect(() => {
     loadUser();
   }, []);
 
   const loadUser = async () => {
-    const userData = await getUser();
-    setUser(userData);
-    
-    if (userData?.notificationPreferences) {
-      setNotificationPrefs(userData.notificationPreferences);
+    try {
+      const userData = await getUser();
+      setUser(userData);
+      if (userData?.notificationPreferences) {
+        setNotificationPrefs(userData.notificationPreferences);
+      }
+    } catch (error) {
+      console.log('Error loading user:', error);
     }
-    
-    console.log('User loaded:', userData?.firstName);
   };
 
-  const handleNotificationPrefChange = async (
-    key: keyof NotificationPreferences,
-    value: boolean
-  ) => {
+  const handleNotificationPrefChange = async (key: keyof NotificationPreferences, value: boolean) => {
     const newPrefs = { ...notificationPrefs, [key]: value };
     setNotificationPrefs(newPrefs);
-
+    
     if (user) {
       const updatedUser = { ...user, notificationPreferences: newPrefs };
       await saveUser(updatedUser);
       setUser(updatedUser);
-    }
-
-    // If enabling push notifications, request permission
-    if (key === 'pushEnabled' && value) {
-      await registerForPushNotificationsAsync();
     }
   };
 
@@ -79,7 +69,6 @@ export default function ProfileScreen() {
           onPress: async () => {
             await removeUser();
             await setAuthenticated(false);
-            console.log('User logged out');
             router.replace('/(auth)/login');
           },
         },
@@ -90,16 +79,15 @@ export default function ProfileScreen() {
   const handleClearData = () => {
     Alert.alert(
       'Clear All Data',
-      'This will delete all local data including shifts and time entries. This action cannot be undone.',
+      'This will delete all local data including shifts, time entries, and notifications. This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Clear',
+          text: 'Clear Data',
           style: 'destructive',
           onPress: async () => {
             await clearAllData();
-            console.log('All data cleared');
-            router.replace('/(auth)/login');
+            Alert.alert('Success', 'All data has been cleared');
           },
         },
       ]
@@ -107,289 +95,158 @@ export default function ProfileScreen() {
   };
 
   const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return theme.error;
-      case 'manager':
-        return theme.warning;
-      default:
-        return theme.primary;
-    }
+    return role === 'admin' ? currentColors.terracotta : currentColors.sage;
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Profile Header */}
-        <View style={[styles.profileHeader, { backgroundColor: theme.card }]}>
-          <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
-            <Text style={[styles.avatarText, { color: theme.card }]}>
-              {user?.firstName?.[0]}{user?.lastName?.[0]}
+    <SafeAreaView style={[styles.container, { backgroundColor: currentColors.background }]} edges={['top']}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: currentColors.text }]}>Profile</Text>
+        </View>
+
+        {/* Profile Card */}
+        <View style={[styles.profileCard, { backgroundColor: getCategoryColor(user?.category || 'breakfast') }]}>
+          <View style={[styles.avatar, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}>
+            <Text style={[styles.avatarText, { color: currentColors.text }]}>
+              {user?.name?.charAt(0).toUpperCase() || 'U'}
             </Text>
           </View>
-          <Text style={[styles.name, { color: theme.text }]}>
-            {user?.firstName} {user?.lastName}
+          <Text style={[styles.name, { color: currentColors.text }]}>
+            {user?.name || 'User'}
           </Text>
-          <Text style={[styles.email, { color: theme.textSecondary }]}>
-            {user?.email}
+          <Text style={[styles.email, { color: currentColors.textSecondary }]}>
+            {user?.email || 'user@hotel.com'}
           </Text>
           <View style={styles.badges}>
-            <View style={[styles.roleBadge, { backgroundColor: getRoleBadgeColor(user?.role || 'employee') }]}>
-              <Text style={[styles.roleText, { color: theme.card }]}>
-                {user?.role?.toUpperCase()}
+            <View style={[styles.badge, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}>
+              <Text style={[styles.badgeText, { color: currentColors.text }]}>
+                {getCategoryName(user?.category || 'breakfast')}
               </Text>
             </View>
-            {user?.category && (
-              <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(user.category) }]}>
-                <Text style={[styles.categoryText, { color: theme.card }]}>
-                  {getCategoryName(user.category).toUpperCase()}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Profile Info */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Information</Text>
-          
-          <View style={[styles.infoCard, { backgroundColor: theme.card }]}>
-            {user?.category && (
-              <>
-                <View style={styles.infoRow}>
-                  <IconSymbol name="tag" size={20} color={theme.primary} />
-                  <View style={styles.infoContent}>
-                    <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
-                      Category
-                    </Text>
-                    <Text style={[styles.infoValue, { color: theme.text }]}>
-                      {getCategoryName(user.category)}
-                    </Text>
-                  </View>
-                </View>
-                <View style={[styles.divider, { backgroundColor: theme.border }]} />
-              </>
-            )}
-
-            <View style={styles.infoRow}>
-              <IconSymbol name="building.2" size={20} color={theme.primary} />
-              <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
-                  Department
-                </Text>
-                <Text style={[styles.infoValue, { color: theme.text }]}>
-                  {user?.department || 'Not assigned'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-            <View style={styles.infoRow}>
-              <IconSymbol name="phone" size={20} color={theme.primary} />
-              <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
-                  Phone Number
-                </Text>
-                <Text style={[styles.infoValue, { color: theme.text }]}>
-                  {user?.phoneNumber || 'Not provided'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-            <View style={styles.infoRow}>
-              <IconSymbol name="calendar" size={20} color={theme.primary} />
-              <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
-                  Member Since
-                </Text>
-                <Text style={[styles.infoValue, { color: theme.text }]}>
-                  {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  }) : 'Unknown'}
-                </Text>
-              </View>
+            <View style={[styles.badge, { backgroundColor: getRoleBadgeColor(user?.role || 'employee') }]}>
+              <Text style={[styles.badgeText, { color: currentColors.text }]}>
+                {user?.role === 'admin' ? 'Admin' : 'Employee'}
+              </Text>
             </View>
           </View>
         </View>
 
-        {/* Notification Preferences */}
+        {/* Notification Settings */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Notification Preferences</Text>
+          <Text style={[styles.sectionTitle, { color: currentColors.text }]}>
+            Notifications
+          </Text>
           
-          <View style={[styles.infoCard, { backgroundColor: theme.card }]}>
-            <View style={styles.prefRow}>
-              <View style={styles.prefLabel}>
-                <IconSymbol name="bell.badge" size={20} color={theme.primary} />
-                <View style={styles.prefText}>
-                  <Text style={[styles.prefTitle, { color: theme.text }]}>
-                    Push Notifications
-                  </Text>
-                  <Text style={[styles.prefDescription, { color: theme.textSecondary }]}>
-                    Receive push notifications on your device
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={notificationPrefs.pushEnabled}
-                onValueChange={(value) => handleNotificationPrefChange('pushEnabled', value)}
-                trackColor={{ false: theme.border, true: theme.primary }}
-                thumbColor={theme.card}
-              />
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-            <View style={styles.prefRow}>
-              <View style={styles.prefLabel}>
-                <IconSymbol name="calendar.badge.clock" size={20} color={theme.primary} />
-                <View style={styles.prefText}>
-                  <Text style={[styles.prefTitle, { color: theme.text }]}>
+          <View style={[styles.settingCard, { backgroundColor: currentColors.card }]}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <IconSymbol name="bell.fill" size={20} color={currentColors.sage} />
+                <View style={styles.settingText}>
+                  <Text style={[styles.settingLabel, { color: currentColors.text }]}>
                     Shift Changes
                   </Text>
-                  <Text style={[styles.prefDescription, { color: theme.textSecondary }]}>
-                    New shifts, updates, cancellations
+                  <Text style={[styles.settingDescription, { color: currentColors.textSecondary }]}>
+                    Get notified about schedule updates
                   </Text>
                 </View>
               </View>
               <Switch
                 value={notificationPrefs.shiftChanges}
                 onValueChange={(value) => handleNotificationPrefChange('shiftChanges', value)}
-                trackColor={{ false: theme.border, true: theme.primary }}
-                thumbColor={theme.card}
+                trackColor={{ false: currentColors.border, true: currentColors.sage }}
+                thumbColor="#FFFFFF"
               />
             </View>
+          </View>
 
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-            <View style={styles.prefRow}>
-              <View style={styles.prefLabel}>
-                <IconSymbol name="clock.badge" size={20} color={theme.primary} />
-                <View style={styles.prefText}>
-                  <Text style={[styles.prefTitle, { color: theme.text }]}>
+          <View style={[styles.settingCard, { backgroundColor: currentColors.card }]}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <IconSymbol name="clock.fill" size={20} color={currentColors.dustyBlue} />
+                <View style={styles.settingText}>
+                  <Text style={[styles.settingLabel, { color: currentColors.text }]}>
                     Reminders
                   </Text>
-                  <Text style={[styles.prefDescription, { color: theme.textSecondary }]}>
-                    Shift starting soon, break time
+                  <Text style={[styles.settingDescription, { color: currentColors.textSecondary }]}>
+                    Receive shift reminders
                   </Text>
                 </View>
               </View>
               <Switch
                 value={notificationPrefs.reminders}
                 onValueChange={(value) => handleNotificationPrefChange('reminders', value)}
-                trackColor={{ false: theme.border, true: theme.primary }}
-                thumbColor={theme.card}
+                trackColor={{ false: currentColors.border, true: currentColors.sage }}
+                thumbColor="#FFFFFF"
               />
             </View>
+          </View>
 
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-            <View style={styles.prefRow}>
-              <View style={styles.prefLabel}>
-                <IconSymbol name="checkmark.circle" size={20} color={theme.primary} />
-                <View style={styles.prefText}>
-                  <Text style={[styles.prefTitle, { color: theme.text }]}>
+          <View style={[styles.settingCard, { backgroundColor: currentColors.card }]}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <IconSymbol name="checkmark.circle.fill" size={20} color={currentColors.terracotta} />
+                <View style={styles.settingText}>
+                  <Text style={[styles.settingLabel, { color: currentColors.text }]}>
                     Approvals
                   </Text>
-                  <Text style={[styles.prefDescription, { color: theme.textSecondary }]}>
-                    Request approvals and rejections
+                  <Text style={[styles.settingDescription, { color: currentColors.textSecondary }]}>
+                    Request approval notifications
                   </Text>
                 </View>
               </View>
               <Switch
                 value={notificationPrefs.approvals}
                 onValueChange={(value) => handleNotificationPrefChange('approvals', value)}
-                trackColor={{ false: theme.border, true: theme.primary }}
-                thumbColor={theme.card}
+                trackColor={{ false: currentColors.border, true: currentColors.sage }}
+                thumbColor="#FFFFFF"
               />
             </View>
           </View>
         </View>
 
-        {/* Settings */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Settings</Text>
-          
-          <TouchableOpacity
-            style={[styles.settingItem, { backgroundColor: theme.card }]}
-            onPress={() => router.push('/(tabs)/notifications')}
-          >
-            <IconSymbol name="bell" size={24} color={theme.text} />
-            <Text style={[styles.settingText, { color: theme.text }]}>
-              Notifications
-            </Text>
-            <IconSymbol name="chevron.right" size={20} color={theme.textSecondary} />
-          </TouchableOpacity>
+        {/* Actions */}
+        <View style={[styles.section, { marginBottom: 100 }]}>
+          <Text style={[styles.sectionTitle, { color: currentColors.text }]}>
+            Actions
+          </Text>
 
           <TouchableOpacity
-            style={[styles.settingItem, { backgroundColor: theme.card }]}
+            style={[styles.actionButton, { backgroundColor: currentColors.card }]}
             onPress={() => router.push('/(tabs)/reports')}
           >
-            <IconSymbol name="doc.text" size={24} color={theme.text} />
-            <Text style={[styles.settingText, { color: theme.text }]}>
-              Monthly Reports
+            <IconSymbol name="doc.text.fill" size={22} color={currentColors.sage} />
+            <Text style={[styles.actionText, { color: currentColors.text }]}>
+              View Reports
             </Text>
-            <IconSymbol name="chevron.right" size={20} color={theme.textSecondary} />
+            <IconSymbol name="chevron.right" size={18} color={currentColors.textTertiary} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.settingItem, { backgroundColor: theme.card }]}
-            onPress={() => Alert.alert('Coming Soon', 'This feature is not yet implemented')}
-          >
-            <IconSymbol name="lock" size={24} color={theme.text} />
-            <Text style={[styles.settingText, { color: theme.text }]}>
-              Privacy & Security
-            </Text>
-            <IconSymbol name="chevron.right" size={20} color={theme.textSecondary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.settingItem, { backgroundColor: theme.card }]}
-            onPress={() => Alert.alert('Coming Soon', 'This feature is not yet implemented')}
-          >
-            <IconSymbol name="questionmark.circle" size={24} color={theme.text} />
-            <Text style={[styles.settingText, { color: theme.text }]}>
-              Help & Support
-            </Text>
-            <IconSymbol name="chevron.right" size={20} color={theme.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Actions */}
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: theme.warning }]}
+            style={[styles.actionButton, { backgroundColor: currentColors.card }]}
             onPress={handleClearData}
           >
-            <IconSymbol name="trash" size={20} color={theme.text} />
-            <Text style={[styles.actionButtonText, { color: theme.text }]}>
+            <IconSymbol name="trash.fill" size={22} color={currentColors.terracotta} />
+            <Text style={[styles.actionText, { color: currentColors.text }]}>
               Clear All Data
             </Text>
+            <IconSymbol name="chevron.right" size={18} color={currentColors.textTertiary} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: theme.error }]}
+            style={[styles.logoutButton, { backgroundColor: currentColors.terracotta }]}
             onPress={handleLogout}
           >
-            <IconSymbol name="arrow.right.square" size={20} color={theme.card} />
-            <Text style={[styles.actionButtonText, { color: theme.card }]}>
+            <IconSymbol name="arrow.right.square.fill" size={22} color={currentColors.text} />
+            <Text style={[styles.logoutText, { color: currentColors.text }]}>
               Logout
             </Text>
           </TouchableOpacity>
-        </View>
-
-        {/* App Info */}
-        <View style={styles.appInfo}>
-          <Text style={[styles.appInfoText, { color: theme.textSecondary }]}>
-            Hotel House of Vienna
-          </Text>
-          <Text style={[styles.appInfoText, { color: theme.textSecondary }]}>
-            Shift Manager v1.0.0
-          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -400,152 +257,135 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
     padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 100,
   },
-  profileHeader: {
-    padding: 24,
-    borderRadius: 12,
-    alignItems: 'center',
+  header: {
     marginBottom: 24,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  profileCard: {
+    borderRadius: 28,
+    padding: 32,
+    alignItems: 'center',
+    marginBottom: 32,
+    boxShadow: '0px 8px 24px rgba(45, 45, 45, 0.08)',
+    elevation: 3,
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 16,
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '700',
   },
   name: {
     fontSize: 24,
     fontWeight: '700',
     marginBottom: 4,
+    letterSpacing: -0.3,
   },
   email: {
-    fontSize: 16,
-    marginBottom: 12,
+    fontSize: 14,
+    marginBottom: 16,
+    letterSpacing: 0.1,
   },
   badges: {
     flexDirection: 'row',
     gap: 8,
   },
-  roleBadge: {
+  badge: {
     paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
-  roleText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  categoryBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  categoryText: {
-    fontSize: 12,
-    fontWeight: '700',
+  badgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 32,
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '600',
+    marginBottom: 16,
+    letterSpacing: 0.2,
+  },
+  settingCard: {
+    borderRadius: 20,
+    padding: 18,
     marginBottom: 12,
-  },
-  infoCard: {
-    padding: 16,
-    borderRadius: 12,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  divider: {
-    height: 1,
-    marginVertical: 16,
-  },
-  prefRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  prefLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  prefText: {
-    flex: 1,
-  },
-  prefTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  prefDescription: {
-    fontSize: 13,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    gap: 16,
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+    boxShadow: '0px 4px 16px rgba(45, 45, 45, 0.04)',
     elevation: 1,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  settingInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    flex: 1,
   },
   settingText: {
     flex: 1,
+    gap: 2,
+  },
+  settingLabel: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  settingDescription: {
+    fontSize: 13,
+    letterSpacing: 0.1,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 8,
+    gap: 14,
+    borderRadius: 20,
+    padding: 18,
     marginBottom: 12,
-    gap: 12,
+    boxShadow: '0px 4px 16px rgba(45, 45, 45, 0.04)',
+    elevation: 1,
   },
-  actionButtonText: {
+  actionText: {
+    flex: 1,
     fontSize: 16,
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
-  appInfo: {
+  logoutButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 24,
+    justifyContent: 'center',
+    gap: 12,
+    borderRadius: 20,
+    padding: 18,
+    marginTop: 8,
+    boxShadow: '0px 6px 20px rgba(212, 165, 154, 0.3)',
+    elevation: 3,
   },
-  appInfoText: {
-    fontSize: 12,
-    marginBottom: 4,
+  logoutText: {
+    fontSize: 17,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
 });

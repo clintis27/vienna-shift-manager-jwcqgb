@@ -1,5 +1,4 @@
 
-import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,57 +9,47 @@ import {
   RefreshControl,
   Platform,
 } from 'react-native';
-import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, darkColors, commonStyles, buttonStyles } from '@/styles/commonStyles';
-import { getUser, getShifts, saveShifts, getNotifications } from '@/utils/storage';
-import { generateMockShifts } from '@/utils/mockData';
+import { router } from 'expo-router';
 import { User, Shift } from '@/types';
+import { colors, darkColors, commonStyles, buttonStyles } from '@/styles/commonStyles';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { generateMockShifts } from '@/utils/mockData';
+import React, { useState, useEffect } from 'react';
 import { getCategoryColor, getCategoryName } from '@/utils/mockData';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getUser, getShifts, saveShifts, getNotifications } from '@/utils/storage';
 
 export default function HomeScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const theme = isDark ? darkColors : colors;
-
   const [user, setUser] = useState<User | null>(null);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const colorScheme = useColorScheme();
+  const currentColors = colorScheme === 'dark' ? darkColors : colors;
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
-    const userData = await getUser();
-    setUser(userData);
+    try {
+      const userData = await getUser();
+      setUser(userData);
 
-    let shiftsData = await getShifts();
-    
-    if (shiftsData.length === 0 && userData) {
-      shiftsData = generateMockShifts(userData.id, userData.category);
-      await saveShifts(shiftsData);
-    }
-
-    if (userData) {
-      if (userData.role === 'admin' && userData.category) {
-        shiftsData = shiftsData.filter(s => s.category === userData.category);
-      } else {
-        shiftsData = shiftsData.filter(s => s.userId === userData.id);
+      let shiftsData = await getShifts();
+      if (!shiftsData || shiftsData.length === 0) {
+        shiftsData = generateMockShifts(userData?.id || '1', userData?.category || 'breakfast');
+        await saveShifts(shiftsData);
       }
+      setShifts(shiftsData);
+
+      const notifications = await getNotifications();
+      const unread = notifications.filter(n => !n.read).length;
+      setUnreadCount(unread);
+    } catch (error) {
+      console.log('Error loading data:', error);
     }
-
-    setShifts(shiftsData);
-
-    // Load unread notifications count
-    const notifications = await getNotifications();
-    const unread = notifications.filter(n => !n.read).length;
-    setUnreadCount(unread);
-
-    console.log('Loaded shifts:', shiftsData.length, 'Unread notifications:', unread);
   };
 
   const onRefresh = async () => {
@@ -69,251 +58,290 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  const getTodayShifts = (): Shift[] => {
+  const getTodayShifts = () => {
     const today = new Date().toISOString().split('T')[0];
     return shifts.filter(shift => shift.date === today);
   };
 
-  const getUpcomingShifts = (): Shift[] => {
+  const getUpcomingShifts = () => {
     const today = new Date().toISOString().split('T')[0];
     return shifts
       .filter(shift => shift.date > today)
       .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(0, 5);
+      .slice(0, 3);
   };
 
-  const formatTime = (time: string): string => {
+  const formatTime = (time: string) => {
     return time;
   };
 
-  const formatDate = (dateStr: string): string => {
+  const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Tomorrow';
-    }
-    
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
+    const options: Intl.DateTimeFormatOptions = { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric' 
+    };
+    return date.toLocaleDateString('en-US', options);
   };
 
-  const getCurrentMonth = (): string => {
-    return new Date().toLocaleDateString('en-US', {
-      month: 'long',
-      year: 'numeric',
-    });
+  const getCurrentMonth = () => {
+    const date = new Date();
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
   const todayShifts = getTodayShifts();
   const upcomingShifts = getUpcomingShifts();
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
+    <SafeAreaView style={[commonStyles.container, { backgroundColor: currentColors.background }]} edges={['top']}>
       <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Header with Notification Bell */}
+        {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text style={[styles.title, { color: theme.text }]}>
-              Work Dashboard
+          <View>
+            <Text style={[styles.greeting, { color: currentColors.textSecondary }]}>
+              Welcome back
             </Text>
-            <Text style={[styles.monthText, { color: theme.textSecondary }]}>
-              {getCurrentMonth()}
+            <Text style={[commonStyles.title, { color: currentColors.text, fontSize: 28 }]}>
+              {user?.name || 'Employee'}
             </Text>
           </View>
           <TouchableOpacity
-            style={[styles.notificationButton, { backgroundColor: theme.card }]}
+            style={[styles.notificationButton, { backgroundColor: currentColors.card }]}
             onPress={() => router.push('/(tabs)/notifications')}
           >
-            <IconSymbol name="bell" size={24} color={theme.text} />
+            <IconSymbol name="bell" size={22} color={currentColors.text} />
             {unreadCount > 0 && (
-              <View style={[styles.badge, { backgroundColor: theme.error }]}>
-                <Text style={[styles.badgeText, { color: theme.card }]}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </Text>
+              <View style={[styles.badge, { backgroundColor: currentColors.terracotta }]}>
+                <Text style={styles.badgeText}>{unreadCount}</Text>
               </View>
             )}
           </TouchableOpacity>
         </View>
 
-        {/* Mini Calendar Preview */}
-        <View style={[styles.calendarPreview, { backgroundColor: theme.card }]}>
-          <View style={styles.calendarHeader}>
-            {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map((day, index) => (
-              <Text key={index} style={[styles.calendarDay, { color: theme.textTertiary }]}>
-                {day}
+        {/* Category Badge */}
+        <View style={[
+          styles.categoryCard,
+          { 
+            backgroundColor: getCategoryColor(user?.category || 'breakfast'),
+          }
+        ]}>
+          <View style={styles.categoryContent}>
+            <IconSymbol 
+              name={
+                user?.category === 'breakfast' ? 'cup.and.saucer.fill' :
+                user?.category === 'housekeeping' ? 'bed.double.fill' :
+                'person.2.fill'
+              } 
+              size={28} 
+              color={currentColors.text} 
+            />
+            <View style={styles.categoryText}>
+              <Text style={[styles.categoryLabel, { color: currentColors.textSecondary }]}>
+                Department
               </Text>
-            ))}
+              <Text style={[styles.categoryName, { color: currentColors.text }]}>
+                {getCategoryName(user?.category || 'breakfast')}
+              </Text>
+            </View>
           </View>
-          <View style={styles.calendarDates}>
-            {[8, 13, 19, 11, 28, 12, 27].map((date, index) => (
-              <View key={index} style={styles.calendarDateContainer}>
-                <Text 
-                  style={[
-                    styles.calendarDate, 
-                    { color: index === 5 ? theme.text : theme.textSecondary },
-                    index === 5 && styles.calendarDateActive
-                  ]}
-                >
-                  {date}
-                </Text>
-                {index === 5 && <View style={[styles.calendarDot, { backgroundColor: theme.pastelPink }]} />}
-              </View>
-            ))}
+          <View style={[styles.categoryBadge, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}>
+            <Text style={[styles.categoryBadgeText, { color: currentColors.text }]}>
+              {user?.role === 'admin' ? 'Admin' : 'Employee'}
+            </Text>
           </View>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={[buttonStyles.pastelBlue, styles.actionButton]}
-            onPress={() => router.push('/(tabs)/time-tracking')}
-            activeOpacity={0.8}
-          >
-            <Text style={[buttonStyles.text, { color: theme.text }]}>Clock In/Out</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[buttonStyles.pastelPink, styles.actionButton]}
-            onPress={() => router.push('/(tabs)/schedule')}
-            activeOpacity={0.8}
-          >
-            <Text style={[buttonStyles.text, { color: theme.text }]}>View Schedule</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[buttonStyles.pastelMint, styles.actionButton]}
-            onPress={() => router.push('/(tabs)/availability')}
-            activeOpacity={0.8}
-          >
-            <Text style={[buttonStyles.text, { color: theme.text }]}>Book Shifts</Text>
-          </TouchableOpacity>
-
-          {user?.role === 'admin' && (
-            <TouchableOpacity
-              style={[buttonStyles.pastelPurple, styles.actionButton]}
-              onPress={() => router.push('/(tabs)/admin')}
-              activeOpacity={0.8}
-            >
-              <Text style={[buttonStyles.text, { color: theme.text }]}>Admin Panel</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Today's Shifts */}
-        {todayShifts.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Today&apos;s Shifts</Text>
-            {todayShifts.map(shift => (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[commonStyles.subtitle, { color: currentColors.text, fontSize: 20 }]}>
+              Today&apos;s Shifts
+            </Text>
+            <Text style={[commonStyles.textSecondary, { fontSize: 13 }]}>
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+            </Text>
+          </View>
+
+          {todayShifts.length > 0 ? (
+            todayShifts.map((shift) => (
               <View
                 key={shift.id}
-                style={[styles.shiftCard, { backgroundColor: theme.card }]}
+                style={[
+                  styles.shiftCard,
+                  { 
+                    backgroundColor: currentColors.card,
+                    borderLeftWidth: 4,
+                    borderLeftColor: getCategoryColor(shift.category),
+                  }
+                ]}
               >
                 <View style={styles.shiftHeader}>
-                  <View style={[styles.shiftIcon, { backgroundColor: theme.pastelBlue }]}>
-                    <IconSymbol name="briefcase" size={20} color={theme.text} />
-                  </View>
                   <View style={styles.shiftInfo}>
-                    <Text style={[styles.shiftDepartment, { color: theme.text }]}>
-                      {shift.department}
+                    <Text style={[styles.shiftTitle, { color: currentColors.text }]}>
+                      {shift.title}
                     </Text>
-                    <Text style={[styles.shiftTime, { color: theme.textSecondary }]}>
+                    <Text style={[styles.shiftTime, { color: currentColors.textSecondary }]}>
                       {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
                     </Text>
                   </View>
                   <View style={[
-                    styles.statusDot,
-                    { backgroundColor: shift.status === 'in-progress' ? theme.success : theme.pastelBlue }
-                  ]} />
+                    styles.shiftBadge,
+                    { backgroundColor: `${getCategoryColor(shift.category)}40` }
+                  ]}>
+                    <Text style={[styles.shiftBadgeText, { color: currentColors.text }]}>
+                      {shift.location}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            ))}
+            ))
+          ) : (
+            <View style={[styles.emptyCard, { backgroundColor: currentColors.card }]}>
+              <IconSymbol name="calendar" size={40} color={currentColors.textTertiary} />
+              <Text style={[styles.emptyText, { color: currentColors.textSecondary }]}>
+                No shifts scheduled for today
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.section}>
+          <Text style={[commonStyles.subtitle, { color: currentColors.text, fontSize: 20, marginBottom: 16 }]}>
+            Quick Actions
+          </Text>
+          <View style={styles.actionsGrid}>
+            <TouchableOpacity
+              style={[styles.actionCard, { backgroundColor: currentColors.sage }]}
+              onPress={() => router.push('/(tabs)/time-tracking')}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}>
+                <IconSymbol name="clock.fill" size={24} color={currentColors.text} />
+              </View>
+              <Text style={[styles.actionText, { color: currentColors.text }]}>
+                Clock In/Out
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionCard, { backgroundColor: currentColors.terracotta }]}
+              onPress={() => router.push('/(tabs)/availability')}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}>
+                <IconSymbol name="calendar.badge.plus" size={24} color={currentColors.text} />
+              </View>
+              <Text style={[styles.actionText, { color: currentColors.text }]}>
+                Book Shifts
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionCard, { backgroundColor: currentColors.dustyBlue }]}
+              onPress={() => router.push('/(tabs)/schedule')}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}>
+                <IconSymbol name="calendar" size={24} color={currentColors.text} />
+              </View>
+              <Text style={[styles.actionText, { color: currentColors.text }]}>
+                View Schedule
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionCard, { backgroundColor: currentColors.cream }]}
+              onPress={() => router.push('/(tabs)/reports')}
+            >
+              <View style={[styles.actionIcon, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}>
+                <IconSymbol name="doc.text.fill" size={24} color={currentColors.text} />
+              </View>
+              <Text style={[styles.actionText, { color: currentColors.text }]}>
+                Reports
+              </Text>
+            </TouchableOpacity>
           </View>
-        )}
+        </View>
 
         {/* Upcoming Shifts */}
-        {upcomingShifts.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Upcoming</Text>
-            {upcomingShifts.map(shift => (
+        <View style={[styles.section, { marginBottom: 100 }]}>
+          <Text style={[commonStyles.subtitle, { color: currentColors.text, fontSize: 20, marginBottom: 16 }]}>
+            Upcoming Shifts
+          </Text>
+          {upcomingShifts.length > 0 ? (
+            upcomingShifts.map((shift) => (
               <View
                 key={shift.id}
-                style={[styles.shiftCard, { backgroundColor: theme.card }]}
+                style={[
+                  styles.upcomingCard,
+                  { 
+                    backgroundColor: currentColors.card,
+                    borderWidth: 1,
+                    borderColor: currentColors.border,
+                  }
+                ]}
               >
-                <View style={styles.shiftHeader}>
-                  <View style={[styles.shiftIcon, { backgroundColor: theme.pastelMint }]}>
-                    <IconSymbol name="calendar" size={20} color={theme.text} />
-                  </View>
-                  <View style={styles.shiftInfo}>
-                    <Text style={[styles.shiftDepartment, { color: theme.text }]}>
-                      {shift.department}
-                    </Text>
-                    <Text style={[styles.shiftTime, { color: theme.textSecondary }]}>
-                      {formatDate(shift.date)} • {formatTime(shift.startTime)}
-                    </Text>
-                  </View>
+                <View style={[
+                  styles.dateCircle,
+                  { backgroundColor: `${getCategoryColor(shift.category)}30` }
+                ]}>
+                  <Text style={[styles.dateDay, { color: currentColors.text }]}>
+                    {new Date(shift.date).getDate()}
+                  </Text>
+                  <Text style={[styles.dateMonth, { color: currentColors.textSecondary }]}>
+                    {new Date(shift.date).toLocaleDateString('en-US', { month: 'short' })}
+                  </Text>
+                </View>
+                <View style={styles.upcomingInfo}>
+                  <Text style={[styles.upcomingTitle, { color: currentColors.text }]}>
+                    {shift.title}
+                  </Text>
+                  <Text style={[styles.upcomingTime, { color: currentColors.textSecondary }]}>
+                    {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
+                  </Text>
+                  <Text style={[styles.upcomingLocation, { color: currentColors.textSecondary }]}>
+                    {shift.location}
+                  </Text>
                 </View>
               </View>
-            ))}
-          </View>
-        )}
-
-        {/* Empty State */}
-        {todayShifts.length === 0 && upcomingShifts.length === 0 && (
-          <View style={[styles.emptyState, { backgroundColor: theme.card }]}>
-            <IconSymbol name="calendar" size={64} color={theme.textTertiary} />
-            <Text style={[styles.emptyTitle, { color: theme.text }]}>No Shifts Scheduled</Text>
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-              Book your shifts to get started
-            </Text>
-          </View>
-        )}
-
-        {/* Bottom Spacing for Tab Bar */}
-        <View style={{ height: 100 }} />
+            ))
+          ) : (
+            <View style={[styles.emptyCard, { backgroundColor: currentColors.card }]}>
+              <IconSymbol name="calendar" size={40} color={currentColors.textTertiary} />
+              <Text style={[styles.emptyText, { color: currentColors.textSecondary }]}>
+                No upcoming shifts
+              </Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 24,
+    padding: 20,
   },
   header: {
-    marginBottom: 24,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    marginBottom: 24,
   },
-  headerText: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
+  greeting: {
+    fontSize: 14,
     marginBottom: 4,
-    letterSpacing: -0.5,
-  },
-  monthText: {
-    fontSize: 17,
-    fontWeight: '500',
+    letterSpacing: 0.3,
   },
   notificationButton: {
     width: 48,
@@ -321,130 +349,190 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+    boxShadow: '0px 4px 12px rgba(45, 45, 45, 0.06)',
     elevation: 2,
     position: 'relative',
   },
   badge: {
     position: 'absolute',
-    top: 4,
-    right: 4,
-    minWidth: 18,
+    top: 8,
+    right: 8,
+    width: 18,
     height: 18,
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
   },
   badgeText: {
+    color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '700',
   },
-  calendarPreview: {
-    borderRadius: 20,
+  categoryCard: {
+    borderRadius: 24,
     padding: 20,
-    marginBottom: 24,
-    boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.06)',
+    marginBottom: 28,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    boxShadow: '0px 6px 20px rgba(45, 45, 45, 0.08)',
     elevation: 2,
   },
-  calendarHeader: {
+  categoryContent: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-  },
-  calendarDay: {
-    fontSize: 13,
-    fontWeight: '600',
-    width: 32,
-    textAlign: 'center',
-  },
-  calendarDates: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  calendarDateContainer: {
     alignItems: 'center',
-    width: 32,
-  },
-  calendarDate: {
-    fontSize: 17,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  calendarDateActive: {
-    fontWeight: '700',
-  },
-  calendarDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
-  actionButtons: {
     gap: 16,
-    marginBottom: 32,
   },
-  actionButton: {
-    width: '100%',
+  categoryText: {
+    gap: 2,
+  },
+  categoryLabel: {
+    fontSize: 12,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  categoryName: {
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  categoryBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  categoryBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 32,
   },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
-    letterSpacing: -0.3,
   },
   shiftCard: {
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     marginBottom: 12,
-    boxShadow: '0px 2px 12px rgba(0, 0, 0, 0.04)',
+    boxShadow: '0px 4px 16px rgba(45, 45, 45, 0.04)',
     elevation: 1,
   },
   shiftHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  shiftIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
   },
   shiftInfo: {
     flex: 1,
+    gap: 4,
   },
-  shiftDepartment: {
-    fontSize: 17,
+  shiftTitle: {
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 2,
+    letterSpacing: 0.2,
   },
   shiftTime: {
-    fontSize: 15,
+    fontSize: 14,
+    letterSpacing: 0.1,
   },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  shiftBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
   },
-  emptyState: {
-    borderRadius: 20,
-    padding: 48,
-    alignItems: 'center',
-    boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
-  },
-  emptyTitle: {
-    fontSize: 20,
+  shiftBadgeText: {
+    fontSize: 12,
     fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+  emptyCard: {
+    borderRadius: 20,
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    boxShadow: '0px 4px 16px rgba(45, 45, 45, 0.04)',
+    elevation: 1,
   },
   emptyText: {
-    fontSize: 15,
+    fontSize: 14,
     textAlign: 'center',
+    letterSpacing: 0.1,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  actionCard: {
+    flex: 1,
+    minWidth: '47%',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    gap: 12,
+    boxShadow: '0px 6px 20px rgba(45, 45, 45, 0.08)',
+    elevation: 2,
+  },
+  actionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    letterSpacing: 0.2,
+  },
+  upcomingCard: {
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  dateCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateDay: {
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  dateMonth: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  upcomingInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  upcomingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  upcomingTime: {
+    fontSize: 13,
+    letterSpacing: 0.1,
+  },
+  upcomingLocation: {
+    fontSize: 12,
+    letterSpacing: 0.1,
   },
 });

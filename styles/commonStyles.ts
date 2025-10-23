@@ -1,163 +1,167 @@
 
 import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
 
-// Modern Pastel Colors - Inspired by the design images
+// Soft Pastel Colors - Inspired by the minimalist design image
 export const colors = {
-  background: '#FFFFFF',           // Pure White
-  backgroundSecondary: '#F8F9FA',  // Very Light Gray
-  text: '#1A1A1A',                 // Almost Black
-  textSecondary: '#8E8E93',        // iOS Gray
-  textTertiary: '#C7C7CC',         // Light Gray
+  // Base Colors
+  background: '#F5F3F0',              // Warm Off-White
+  backgroundSecondary: '#FAFAF8',     // Very Light Cream
+  text: '#2D2D2D',                    // Soft Black
+  textSecondary: '#8B8B8B',           // Medium Gray
+  textTertiary: '#B8B8B8',            // Light Gray
   
-  // Pastel Gradient Colors
-  pastelBlue: '#A8D5FF',           // Light Blue
-  pastelPink: '#FFB3D9',           // Light Pink
-  pastelMint: '#B3F5D1',           // Mint Green
-  pastelPurple: '#D4B3FF',         // Light Purple
-  pastelYellow: '#FFE5B3',         // Light Yellow
-  pastelPeach: '#FFD4B3',          // Light Peach
+  // Pastel Accent Colors (Muted & Soft)
+  sage: '#B8C5B8',                    // Sage Green
+  terracotta: '#D4A59A',              // Terracotta/Dusty Rose
+  cream: '#E8DDD0',                   // Warm Cream
+  dustyBlue: '#C4D4D9',               // Dusty Blue
+  softPeach: '#E8C4B8',               // Soft Peach
+  mintCream: '#D4E4D8',               // Mint Cream
   
-  // Solid Accent Colors
-  primary: '#007AFF',              // iOS Blue
-  secondary: '#5856D6',            // iOS Purple
-  accent: '#34C759',               // iOS Green
+  // Functional Colors (Muted)
+  primary: '#B8C5B8',                 // Sage Green
+  secondary: '#D4A59A',               // Terracotta
+  accent: '#C4D4D9',                  // Dusty Blue
   
-  card: '#FFFFFF',                 // White
-  cardSecondary: '#F2F2F7',        // Light Gray Card
+  card: '#FFFFFF',                    // Pure White
+  cardSecondary: '#FAFAF8',           // Light Cream
   
-  error: '#FF3B30',                // iOS Red
-  success: '#34C759',              // iOS Green
-  warning: '#FF9500',              // iOS Orange
+  error: '#D4A59A',                   // Soft Terracotta (muted error)
+  success: '#B8C5B8',                 // Sage Green
+  warning: '#E8C4B8',                 // Soft Peach
   
-  border: '#E5E5EA',               // Light Border
-  shadow: 'rgba(0, 0, 0, 0.08)',   // Subtle Shadow
+  border: '#E8E6E3',                  // Very Light Gray
+  shadow: 'rgba(45, 45, 45, 0.06)',   // Subtle Shadow
   
   // Category Colors (for hotel departments)
-  breakfast: '#FFE5B3',            // Light Yellow
-  housekeeping: '#B3F5D1',         // Mint Green
-  frontDesk: '#A8D5FF',            // Light Blue
+  breakfast: '#E8C4B8',               // Soft Peach
+  housekeeping: '#B8C5B8',            // Sage Green
+  frontDesk: '#C4D4D9',               // Dusty Blue
 };
 
-// Dark mode colors
+// Dark mode colors (muted dark palette)
 export const darkColors = {
-  background: '#000000',
-  backgroundSecondary: '#1C1C1E',
-  text: '#FFFFFF',
-  textSecondary: '#98989D',
-  textTertiary: '#48484A',
+  background: '#1A1A1A',
+  backgroundSecondary: '#252525',
+  text: '#F5F3F0',
+  textSecondary: '#A8A8A8',
+  textTertiary: '#6B6B6B',
   
-  pastelBlue: '#4A90E2',
-  pastelPink: '#E85D9F',
-  pastelMint: '#5FD68A',
-  pastelPurple: '#9B7FE8',
-  pastelYellow: '#FFB84D',
-  pastelPeach: '#FF9F66',
+  sage: '#8B9B8B',
+  terracotta: '#A8857A',
+  cream: '#B8ADA0',
+  dustyBlue: '#94A4A9',
+  softPeach: '#B89488',
+  mintCream: '#A4B4A8',
   
-  primary: '#0A84FF',
-  secondary: '#5E5CE6',
-  accent: '#30D158',
+  primary: '#8B9B8B',
+  secondary: '#A8857A',
+  accent: '#94A4A9',
   
-  card: '#1C1C1E',
-  cardSecondary: '#2C2C2E',
+  card: '#252525',
+  cardSecondary: '#2D2D2D',
   
-  error: '#FF453A',
-  success: '#30D158',
-  warning: '#FF9F0A',
+  error: '#A8857A',
+  success: '#8B9B8B',
+  warning: '#B89488',
   
-  border: '#38383A',
+  border: '#3A3A3A',
   shadow: 'rgba(0, 0, 0, 0.3)',
   
-  breakfast: '#8B7355',
-  housekeeping: '#4A8B6F',
-  frontDesk: '#4A6B8B',
+  breakfast: '#B89488',
+  housekeeping: '#8B9B8B',
+  frontDesk: '#94A4A9',
 };
 
 export const buttonStyles = StyleSheet.create({
-  // Pastel Gradient Buttons
-  pastelBlue: {
-    backgroundColor: colors.pastelBlue,
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    borderRadius: 28,
+  // Soft Pastel Buttons
+  sage: {
+    backgroundColor: colors.sage,
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 8px 24px rgba(168, 213, 255, 0.4)',
-    elevation: 4,
+    boxShadow: '0px 6px 20px rgba(184, 197, 184, 0.25)',
+    elevation: 3,
   },
-  pastelPink: {
-    backgroundColor: colors.pastelPink,
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    borderRadius: 28,
+  terracotta: {
+    backgroundColor: colors.terracotta,
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 8px 24px rgba(255, 179, 217, 0.4)',
-    elevation: 4,
+    boxShadow: '0px 6px 20px rgba(212, 165, 154, 0.25)',
+    elevation: 3,
   },
-  pastelMint: {
-    backgroundColor: colors.pastelMint,
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    borderRadius: 28,
+  cream: {
+    backgroundColor: colors.cream,
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 8px 24px rgba(179, 245, 209, 0.4)',
-    elevation: 4,
+    boxShadow: '0px 6px 20px rgba(232, 221, 208, 0.25)',
+    elevation: 3,
   },
-  pastelPurple: {
-    backgroundColor: colors.pastelPurple,
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    borderRadius: 28,
+  dustyBlue: {
+    backgroundColor: colors.dustyBlue,
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 8px 24px rgba(212, 179, 255, 0.4)',
-    elevation: 4,
+    boxShadow: '0px 6px 20px rgba(196, 212, 217, 0.25)',
+    elevation: 3,
   },
   primary: {
     backgroundColor: colors.primary,
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    borderRadius: 28,
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 8px 24px rgba(0, 122, 255, 0.3)',
-    elevation: 4,
+    boxShadow: '0px 6px 20px rgba(184, 197, 184, 0.3)',
+    elevation: 3,
   },
   secondary: {
     backgroundColor: colors.secondary,
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    borderRadius: 28,
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 8px 24px rgba(88, 86, 214, 0.3)',
-    elevation: 4,
+    boxShadow: '0px 6px 20px rgba(212, 165, 154, 0.3)',
+    elevation: 3,
   },
   outline: {
     backgroundColor: 'transparent',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 28,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   text: {
     color: colors.text,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
+    letterSpacing: 0.3,
   },
   textWhite: {
     color: '#FFFFFF',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
+    letterSpacing: 0.3,
   },
   textOutline: {
     color: colors.primary,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
+    letterSpacing: 0.3,
   },
 });
 
@@ -171,77 +175,91 @@ export const commonStyles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 24,
+    padding: 20,
   },
-  // Modern Card with Subtle Shadow
+  // Soft Card with Minimal Shadow
   card: {
     backgroundColor: colors.card,
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 20,
     marginBottom: 16,
-    boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    boxShadow: '0px 4px 16px rgba(45, 45, 45, 0.04)',
+    elevation: 1,
   },
-  // Card with Border (Alternative Style)
+  // Card with Subtle Border
   cardBordered: {
     backgroundColor: colors.card,
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  // Floating Card with More Shadow
+  // Elevated Card
   cardFloating: {
     backgroundColor: colors.card,
-    borderRadius: 24,
+    borderRadius: 28,
     padding: 24,
     marginBottom: 20,
-    boxShadow: '0px 8px 32px rgba(0, 0, 0, 0.08)',
-    elevation: 4,
+    boxShadow: '0px 8px 24px rgba(45, 45, 45, 0.06)',
+    elevation: 2,
+  },
+  // Large Hero Card
+  cardHero: {
+    backgroundColor: colors.card,
+    borderRadius: 32,
+    padding: 28,
+    marginBottom: 24,
+    boxShadow: '0px 12px 32px rgba(45, 45, 45, 0.08)',
+    elevation: 3,
   },
   title: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '700',
     color: colors.text,
     marginBottom: 8,
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '600',
     color: colors.text,
     marginBottom: 12,
     letterSpacing: -0.3,
   },
   heading: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.text,
     marginBottom: 8,
+    letterSpacing: 0.2,
   },
   text: {
-    fontSize: 17,
+    fontSize: 16,
     color: colors.text,
     lineHeight: 24,
+    letterSpacing: 0.2,
   },
   textSecondary: {
-    fontSize: 15,
+    fontSize: 14,
     color: colors.textSecondary,
-    lineHeight: 22,
+    lineHeight: 20,
+    letterSpacing: 0.1,
   },
   textSmall: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
-    lineHeight: 18,
+    lineHeight: 16,
+    letterSpacing: 0.1,
   },
   input: {
     backgroundColor: colors.cardSecondary,
-    borderWidth: 0,
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    fontSize: 17,
+    fontSize: 16,
     color: colors.text,
     marginBottom: 16,
   },
@@ -259,15 +277,16 @@ export const commonStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   badge: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 20,
     alignSelf: 'flex-start',
   },
   badgeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: colors.card,
+    color: colors.text,
+    letterSpacing: 0.3,
   },
   divider: {
     height: 1,
@@ -275,11 +294,11 @@ export const commonStyles = StyleSheet.create({
     marginVertical: 20,
   },
   shadow: {
-    boxShadow: '0px 8px 24px rgba(0, 0, 0, 0.08)',
-    elevation: 4,
+    boxShadow: '0px 6px 20px rgba(45, 45, 45, 0.06)',
+    elevation: 2,
   },
   shadowLarge: {
-    boxShadow: '0px 12px 40px rgba(0, 0, 0, 0.12)',
-    elevation: 6,
+    boxShadow: '0px 12px 32px rgba(45, 45, 45, 0.08)',
+    elevation: 4,
   },
 });
