@@ -5,7 +5,7 @@ import { User, Shift, Department, EmployeeCategory } from '@/types';
 export const mockUsers: User[] = [
   {
     id: '1',
-    email: 'admin@vienna.com',
+    email: 'admin@hotel.com',
     firstName: 'Admin',
     lastName: 'User',
     role: 'admin',
@@ -15,7 +15,7 @@ export const mockUsers: User[] = [
   },
   {
     id: '2',
-    email: 'breakfast-admin@vienna.com',
+    email: 'breakfast-admin@hotel.com',
     firstName: 'Maria',
     lastName: 'Schmidt',
     role: 'admin',
@@ -26,7 +26,7 @@ export const mockUsers: User[] = [
   },
   {
     id: '3',
-    email: 'housekeeping-admin@vienna.com',
+    email: 'housekeeping-admin@hotel.com',
     firstName: 'Hans',
     lastName: 'Müller',
     role: 'admin',
@@ -37,7 +37,7 @@ export const mockUsers: User[] = [
   },
   {
     id: '4',
-    email: 'frontdesk-admin@vienna.com',
+    email: 'frontdesk-admin@hotel.com',
     firstName: 'Anna',
     lastName: 'Weber',
     role: 'admin',
@@ -48,7 +48,7 @@ export const mockUsers: User[] = [
   },
   {
     id: '5',
-    email: 'employee@vienna.com',
+    email: 'employee@hotel.com',
     firstName: 'Peter',
     lastName: 'Fischer',
     role: 'employee',
@@ -58,6 +58,15 @@ export const mockUsers: User[] = [
     createdAt: new Date().toISOString(),
   },
 ];
+
+// Password mapping for demo users
+const userPasswords: Record<string, string> = {
+  'admin@hotel.com': 'admin123',
+  'breakfast-admin@hotel.com': 'admin123',
+  'housekeeping-admin@hotel.com': 'admin123',
+  'frontdesk-admin@hotel.com': 'admin123',
+  'employee@hotel.com': 'emp123',
+};
 
 // Mock departments
 export const mockDepartments: Department[] = [
@@ -126,15 +135,26 @@ export const generateMockShifts = (userId?: string, category?: EmployeeCategory)
 export const validateLogin = (email: string, password: string): User | null => {
   console.log('Validating login for:', email);
   
-  // Simple mock validation
-  const user = mockUsers.find(u => u.email === email);
+  // Trim inputs
+  const trimmedEmail = email.trim().toLowerCase();
+  const trimmedPassword = password.trim();
   
-  if (user && password.length >= 6) {
-    console.log('Login successful for user:', user.firstName);
+  // Find user by email
+  const user = mockUsers.find(u => u.email.toLowerCase() === trimmedEmail);
+  
+  if (!user) {
+    console.log('User not found');
+    return null;
+  }
+  
+  // Check password
+  const expectedPassword = userPasswords[user.email];
+  if (trimmedPassword === expectedPassword) {
+    console.log('Login successful for user:', user.firstName, user.lastName);
     return user;
   }
   
-  console.log('Login failed');
+  console.log('Invalid password');
   return null;
 };
 
@@ -165,7 +185,7 @@ export const registerUser = (
     createdAt: new Date().toISOString(),
   };
   
-  console.log('User registered successfully:', newUser.firstName);
+  console.log('User registered successfully:', newUser.firstName, newUser.lastName);
   return newUser;
 };
 

@@ -26,6 +26,7 @@ export default function ProfileScreen() {
     shiftChanges: true,
     reminders: true,
     approvals: true,
+    pushEnabled: true,
   });
   const colorScheme = useColorScheme();
   const currentColors = colorScheme === 'dark' ? darkColors : colors;
@@ -37,6 +38,7 @@ export default function ProfileScreen() {
   const loadUser = async () => {
     try {
       const userData = await getUser();
+      console.log('Loaded user data:', userData);
       setUser(userData);
       if (userData?.notificationPreferences) {
         setNotificationPrefs(userData.notificationPreferences);
@@ -67,9 +69,16 @@ export default function ProfileScreen() {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
-            await removeUser();
-            await setAuthenticated(false);
-            router.replace('/(auth)/login');
+            try {
+              console.log('Logging out...');
+              await removeUser();
+              await setAuthenticated(false);
+              console.log('Logout successful, redirecting to login...');
+              router.replace('/(auth)/login');
+            } catch (error) {
+              console.error('Error during logout:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
           },
         },
       ]
@@ -86,8 +95,13 @@ export default function ProfileScreen() {
           text: 'Clear Data',
           style: 'destructive',
           onPress: async () => {
-            await clearAllData();
-            Alert.alert('Success', 'All data has been cleared');
+            try {
+              await clearAllData();
+              Alert.alert('Success', 'All data has been cleared');
+            } catch (error) {
+              console.error('Error clearing data:', error);
+              Alert.alert('Error', 'Failed to clear data');
+            }
           },
         },
       ]
@@ -96,6 +110,18 @@ export default function ProfileScreen() {
 
   const getRoleBadgeColor = (role: string) => {
     return role === 'admin' ? currentColors.terracotta : currentColors.sage;
+  };
+
+  const getUserName = () => {
+    if (!user) return 'User';
+    return `${user.firstName} ${user.lastName}`.trim() || 'User';
+  };
+
+  const getUserInitials = () => {
+    if (!user) return 'U';
+    const firstInitial = user.firstName?.charAt(0).toUpperCase() || '';
+    const lastInitial = user.lastName?.charAt(0).toUpperCase() || '';
+    return firstInitial + lastInitial || 'U';
   };
 
   return (
@@ -114,21 +140,23 @@ export default function ProfileScreen() {
         <View style={[styles.profileCard, { backgroundColor: getCategoryColor(user?.category || 'breakfast') }]}>
           <View style={[styles.avatar, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}>
             <Text style={[styles.avatarText, { color: currentColors.text }]}>
-              {user?.name?.charAt(0).toUpperCase() || 'U'}
+              {getUserInitials()}
             </Text>
           </View>
           <Text style={[styles.name, { color: currentColors.text }]}>
-            {user?.name || 'User'}
+            {getUserName()}
           </Text>
           <Text style={[styles.email, { color: currentColors.textSecondary }]}>
             {user?.email || 'user@hotel.com'}
           </Text>
           <View style={styles.badges}>
-            <View style={[styles.badge, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}>
-              <Text style={[styles.badgeText, { color: currentColors.text }]}>
-                {getCategoryName(user?.category || 'breakfast')}
-              </Text>
-            </View>
+            {user?.category && (
+              <View style={[styles.badge, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}>
+                <Text style={[styles.badgeText, { color: currentColors.text }]}>
+                  {getCategoryName(user.category)}
+                </Text>
+              </View>
+            )}
             <View style={[styles.badge, { backgroundColor: getRoleBadgeColor(user?.role || 'employee') }]}>
               <Text style={[styles.badgeText, { color: currentColors.text }]}>
                 {user?.role === 'admin' ? 'Admin' : 'Employee'}

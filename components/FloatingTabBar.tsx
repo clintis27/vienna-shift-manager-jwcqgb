@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,8 +18,11 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withTiming,
   interpolate,
+  Extrapolate,
 } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 
 interface TabBarItem {
   name: string;
@@ -38,7 +41,7 @@ interface FloatingTabBarProps {
 export default function FloatingTabBar({
   tabs,
   containerWidth = Dimensions.get('window').width - 40,
-  borderRadius = 28,
+  borderRadius = 30,
   bottomMargin = 16,
 }: FloatingTabBarProps) {
   const router = useRouter();
@@ -49,13 +52,30 @@ export default function FloatingTabBar({
 
   const activeIndex = tabs.findIndex(tab => pathname.includes(tab.route));
   const indicatorPosition = useSharedValue(activeIndex >= 0 ? activeIndex : 0);
+  const tabScales = tabs.map(() => useSharedValue(1));
 
-  const handleTabPress = (route: string) => {
-    const newIndex = tabs.findIndex(tab => tab.route === route);
-    indicatorPosition.value = withSpring(newIndex, {
-      damping: 18,
-      stiffness: 100,
+  useEffect(() => {
+    const newIndex = tabs.findIndex(tab => pathname.includes(tab.route));
+    if (newIndex >= 0) {
+      indicatorPosition.value = withSpring(newIndex, {
+        damping: 20,
+        stiffness: 120,
+      });
+    }
+  }, [pathname]);
+
+  const handleTabPress = (route: string, index: number) => {
+    // Haptic feedback
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+
+    // Animate tab scale
+    tabScales[index].value = withSpring(0.85, { damping: 10, stiffness: 400 }, () => {
+      tabScales[index].value = withSpring(1, { damping: 10, stiffness: 400 });
     });
+
+    // Navigate
     router.push(route as any);
   };
 
@@ -64,11 +84,10 @@ export default function FloatingTabBar({
     return {
       transform: [
         {
-          translateX: interpolate(
-            indicatorPosition.value,
-            tabs.map((_, i) => i),
-            tabs.map((_, i) => i * tabWidth)
-          ),
+          translateX: withSpring(indicatorPosition.value * tabWidth, {
+            damping: 20,
+            stiffness: 120,
+          }),
         },
       ],
     };
@@ -82,7 +101,7 @@ export default function FloatingTabBar({
       <View style={[styles.container, { width: containerWidth, borderRadius }]}>
         {Platform.OS === 'ios' ? (
           <BlurView 
-            intensity={90} 
+            intensity={95} 
             tint={isDark ? 'dark' : 'light'} 
             style={[styles.blur, { borderRadius }]}
           >
@@ -90,50 +109,66 @@ export default function FloatingTabBar({
               styles.content, 
               { 
                 backgroundColor: isDark 
-                  ? 'rgba(37, 37, 37, 0.85)' 
-                  : 'rgba(255, 255, 255, 0.85)',
-                borderWidth: 1,
+                  ? 'rgba(37, 37, 37, 0.88)' 
+                  : 'rgba(255, 255, 255, 0.88)',
+                borderWidth: 1.5,
                 borderColor: isDark 
-                  ? 'rgba(255, 255, 255, 0.08)' 
-                  : 'rgba(45, 45, 45, 0.06)',
+                  ? 'rgba(255, 255, 255, 0.1)' 
+                  : 'rgba(45, 45, 45, 0.08)',
               }
             ]}>
               <Animated.View
                 style={[
                   styles.indicator,
                   {
-                    width: (containerWidth - 16) / tabs.length - 8,
+                    width: (containerWidth - 20) / tabs.length - 10,
                     backgroundColor: currentColors.sage,
                   },
                   indicatorStyle,
                 ]}
               />
-              {tabs.map((tab) => {
+              {tabs.map((tab, index) => {
                 const isActive = pathname.includes(tab.route);
+                
+                const animatedTabStyle = useAnimatedStyle(() => ({
+                  transform: [{ scale: tabScales[index].value }],
+                }));
+
                 return (
-                  <TouchableOpacity
-                    key={tab.name}
-                    style={styles.tab}
-                    onPress={() => handleTabPress(tab.route)}
-                    activeOpacity={0.7}
-                  >
-                    <IconSymbol
-                      name={tab.icon}
-                      size={22}
-                      color={isActive ? currentColors.text : currentColors.textSecondary}
-                    />
-                    <Text
-                      style={[
-                        styles.label,
-                        {
-                          color: isActive ? currentColors.text : currentColors.textSecondary,
-                          fontWeight: isActive ? '600' : '500',
-                        },
-                      ]}
+                  <Animated.View key={tab.name} style={[styles.tab, animatedTabStyle]}>
+                    <TouchableOpacity
+                      style={styles.tabButton}
+                      onPress={() => handleTabPress(tab.route, index)}
+                      activeOpacity={0.7}
                     >
-                      {tab.label}
-                    </Text>
-                  </TouchableOpacity>
+                      <View style={[
+                        styles.iconContainer,
+                        isActive && {
+                          backgroundColor: isDark 
+                            ? 'rgba(184, 197, 184, 0.15)' 
+                            : 'rgba(184, 197, 184, 0.2)',
+                        }
+                      ]}>
+                        <IconSymbol
+                          name={tab.icon}
+                          size={isActive ? 24 : 22}
+                          color={isActive ? currentColors.sage : currentColors.textSecondary}
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.label,
+                          {
+                            color: isActive ? currentColors.text : currentColors.textSecondary,
+                            fontWeight: isActive ? '700' : '500',
+                            fontSize: isActive ? 11 : 10,
+                          },
+                        ]}
+                      >
+                        {tab.label}
+                      </Text>
+                    </TouchableOpacity>
+                  </Animated.View>
                 );
               })}
             </View>
@@ -143,7 +178,7 @@ export default function FloatingTabBar({
             styles.content, 
             { 
               backgroundColor: currentColors.card,
-              borderWidth: 1,
+              borderWidth: 1.5,
               borderColor: currentColors.border,
             }
           ]}>
@@ -151,38 +186,52 @@ export default function FloatingTabBar({
               style={[
                 styles.indicator,
                 {
-                  width: (containerWidth - 16) / tabs.length - 8,
+                  width: (containerWidth - 20) / tabs.length - 10,
                   backgroundColor: currentColors.sage,
                 },
                 indicatorStyle,
               ]}
             />
-            {tabs.map((tab) => {
+            {tabs.map((tab, index) => {
               const isActive = pathname.includes(tab.route);
+              
+              const animatedTabStyle = useAnimatedStyle(() => ({
+                transform: [{ scale: tabScales[index].value }],
+              }));
+
               return (
-                <TouchableOpacity
-                  key={tab.name}
-                  style={styles.tab}
-                  onPress={() => handleTabPress(tab.route)}
-                  activeOpacity={0.7}
-                >
-                  <IconSymbol
-                    name={tab.icon}
-                    size={22}
-                    color={isActive ? currentColors.text : currentColors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.label,
-                      {
-                        color: isActive ? currentColors.text : currentColors.textSecondary,
-                        fontWeight: isActive ? '600' : '500',
-                      },
-                    ]}
+                <Animated.View key={tab.name} style={[styles.tab, animatedTabStyle]}>
+                  <TouchableOpacity
+                    style={styles.tabButton}
+                    onPress={() => handleTabPress(tab.route, index)}
+                    activeOpacity={0.7}
                   >
-                    {tab.label}
-                  </Text>
-                </TouchableOpacity>
+                    <View style={[
+                      styles.iconContainer,
+                      isActive && {
+                        backgroundColor: 'rgba(184, 197, 184, 0.2)',
+                      }
+                    ]}>
+                      <IconSymbol
+                        name={tab.icon}
+                        size={isActive ? 24 : 22}
+                        color={isActive ? currentColors.sage : currentColors.textSecondary}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.label,
+                        {
+                          color: isActive ? currentColors.text : currentColors.textSecondary,
+                          fontWeight: isActive ? '700' : '500',
+                          fontSize: isActive ? 11 : 10,
+                        },
+                      ]}
+                    >
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                </Animated.View>
               );
             })}
           </View>
@@ -203,36 +252,46 @@ const styles = StyleSheet.create({
   },
   container: {
     overflow: 'hidden',
-    boxShadow: '0px 8px 32px rgba(45, 45, 45, 0.12)',
-    elevation: 6,
+    boxShadow: '0px 10px 40px rgba(45, 45, 45, 0.15)',
+    elevation: 8,
   },
   blur: {
     overflow: 'hidden',
   },
   content: {
     flexDirection: 'row',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
     position: 'relative',
-    borderRadius: 28,
+    borderRadius: 30,
   },
   indicator: {
     position: 'absolute',
-    height: '75%',
-    top: '12.5%',
-    left: 12,
-    borderRadius: 20,
-    opacity: 0.2,
+    height: '80%',
+    top: '10%',
+    left: 15,
+    borderRadius: 22,
+    opacity: 0.25,
   },
   tab: {
     flex: 1,
+  },
+  tabButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    gap: 4,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s ease',
   },
   label: {
-    fontSize: 10,
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
+    textAlign: 'center',
   },
 });

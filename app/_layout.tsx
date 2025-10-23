@@ -6,7 +6,7 @@ import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useColorScheme, Alert } from 'react-native';
+import { useColorScheme, Alert, ActivityIndicator, View } from 'react-native';
 import { useNetworkState } from 'expo-network';
 import {
   DarkTheme,
@@ -31,6 +31,7 @@ export default function RootLayout() {
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
   const [isReady, setIsReady] = useState(false);
+  const [initialRoute, setInitialRoute] = useState<string | null>(null);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -40,8 +41,14 @@ export default function RootLayout() {
 
       try {
         console.log('Initializing app...');
+        
+        // Check authentication status
         const isAuth = await isAuthenticated();
         console.log('Is authenticated:', isAuth);
+        
+        // Set initial route
+        const route = isAuth ? '/(tabs)/(home)' : '/(auth)/login';
+        setInitialRoute(route);
         
         // Hide splash screen
         await SplashScreen.hideAsync();
@@ -49,16 +56,11 @@ export default function RootLayout() {
         // Set ready state
         setIsReady(true);
         
-        // Navigate based on auth status
-        setTimeout(() => {
-          if (isAuth) {
-            router.replace('/(tabs)/(home)');
-          } else {
-            router.replace('/(auth)/login');
-          }
-        }, 100);
+        console.log('App initialization complete');
       } catch (error) {
         console.error('Error initializing app:', error);
+        // Fallback to login on error
+        setInitialRoute('/(auth)/login');
         setIsReady(true);
         await SplashScreen.hideAsync();
       }
@@ -66,6 +68,16 @@ export default function RootLayout() {
 
     initializeApp();
   }, [loaded]);
+
+  // Navigate to initial route once ready
+  useEffect(() => {
+    if (isReady && initialRoute) {
+      console.log('Navigating to initial route:', initialRoute);
+      setTimeout(() => {
+        router.replace(initialRoute as any);
+      }, 100);
+    }
+  }, [isReady, initialRoute]);
 
   React.useEffect(() => {
     if (
@@ -87,24 +99,24 @@ export default function RootLayout() {
     ...DefaultTheme,
     dark: false,
     colors: {
-      primary: 'rgb(25, 118, 210)',
-      background: 'rgb(245, 245, 245)',
+      primary: 'rgb(184, 197, 184)',
+      background: 'rgb(250, 250, 250)',
       card: 'rgb(255, 255, 255)',
-      text: 'rgb(33, 33, 33)',
-      border: 'rgb(224, 224, 224)',
-      notification: 'rgb(211, 47, 47)',
+      text: 'rgb(45, 45, 45)',
+      border: 'rgb(230, 230, 230)',
+      notification: 'rgb(212, 165, 154)',
     },
   };
 
   const CustomDarkTheme: Theme = {
     ...DarkTheme,
     colors: {
-      primary: 'rgb(66, 165, 245)',
+      primary: 'rgb(184, 197, 184)',
       background: 'rgb(18, 18, 18)',
-      card: 'rgb(30, 30, 30)',
-      text: 'rgb(255, 255, 255)',
-      border: 'rgb(44, 44, 44)',
-      notification: 'rgb(239, 83, 80)',
+      card: 'rgb(37, 37, 37)',
+      text: 'rgb(245, 245, 245)',
+      border: 'rgb(60, 60, 60)',
+      notification: 'rgb(212, 165, 154)',
     },
   };
 
@@ -115,7 +127,7 @@ export default function RootLayout() {
         value={colorScheme === 'dark' ? CustomDarkTheme : CustomDefaultTheme}
       >
         <WidgetProvider>
-          <GestureHandlerRootView>
+          <GestureHandlerRootView style={{ flex: 1 }}>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(auth)" />
               <Stack.Screen name="(tabs)" />

@@ -35,6 +35,7 @@ export default function HomeScreen() {
   const loadData = async () => {
     try {
       const userData = await getUser();
+      console.log('Home screen loaded user:', userData);
       setUser(userData);
 
       let shiftsData = await getShifts();
@@ -85,9 +86,9 @@ export default function HomeScreen() {
     return date.toLocaleDateString('en-US', options);
   };
 
-  const getCurrentMonth = () => {
-    const date = new Date();
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const getUserName = () => {
+    if (!user) return 'Employee';
+    return `${user.firstName} ${user.lastName}`.trim() || 'Employee';
   };
 
   const todayShifts = getTodayShifts();
@@ -110,7 +111,7 @@ export default function HomeScreen() {
               Welcome back
             </Text>
             <Text style={[commonStyles.title, { color: currentColors.text, fontSize: 28 }]}>
-              {user?.name || 'Employee'}
+              {getUserName()}
             </Text>
           </View>
           <TouchableOpacity
@@ -186,7 +187,7 @@ export default function HomeScreen() {
                 <View style={styles.shiftHeader}>
                   <View style={styles.shiftInfo}>
                     <Text style={[styles.shiftTitle, { color: currentColors.text }]}>
-                      {shift.title}
+                      {shift.position}
                     </Text>
                     <Text style={[styles.shiftTime, { color: currentColors.textSecondary }]}>
                       {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
@@ -197,7 +198,7 @@ export default function HomeScreen() {
                     { backgroundColor: `${getCategoryColor(shift.category)}40` }
                   ]}>
                     <Text style={[styles.shiftBadgeText, { color: currentColors.text }]}>
-                      {shift.location}
+                      {shift.department}
                     </Text>
                   </View>
                 </View>
@@ -300,13 +301,13 @@ export default function HomeScreen() {
                 </View>
                 <View style={styles.upcomingInfo}>
                   <Text style={[styles.upcomingTitle, { color: currentColors.text }]}>
-                    {shift.title}
+                    {shift.position}
                   </Text>
                   <Text style={[styles.upcomingTime, { color: currentColors.textSecondary }]}>
                     {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
                   </Text>
                   <Text style={[styles.upcomingLocation, { color: currentColors.textSecondary }]}>
-                    {shift.location}
+                    {shift.department}
                   </Text>
                 </View>
               </View>
