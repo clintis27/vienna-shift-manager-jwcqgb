@@ -30,34 +30,41 @@ export default function RootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
-  const [isAuthChecked, setIsAuthChecked] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    console.log('Checking authentication status...');
-    const isAuth = await isAuthenticated();
-    console.log('Is authenticated:', isAuth);
-    
-    if (loaded) {
-      SplashScreen.hideAsync();
-      setIsAuthChecked(true);
-      
-      // Navigate based on auth status
-      if (isAuth) {
-        router.replace('/(tabs)/(home)');
-      } else {
-        router.replace('/(auth)/login');
+    const initializeApp = async () => {
+      if (!loaded) {
+        return;
       }
-    }
-  };
 
-  useEffect(() => {
-    if (loaded && !isAuthChecked) {
-      checkAuth();
-    }
+      try {
+        console.log('Initializing app...');
+        const isAuth = await isAuthenticated();
+        console.log('Is authenticated:', isAuth);
+        
+        // Hide splash screen
+        await SplashScreen.hideAsync();
+        
+        // Set ready state
+        setIsReady(true);
+        
+        // Navigate based on auth status
+        setTimeout(() => {
+          if (isAuth) {
+            router.replace('/(tabs)/(home)');
+          } else {
+            router.replace('/(auth)/login');
+          }
+        }, 100);
+      } catch (error) {
+        console.error('Error initializing app:', error);
+        setIsReady(true);
+        await SplashScreen.hideAsync();
+      }
+    };
+
+    initializeApp();
   }, [loaded]);
 
   React.useEffect(() => {
@@ -72,7 +79,7 @@ export default function RootLayout() {
     }
   }, [networkState.isConnected, networkState.isInternetReachable]);
 
-  if (!loaded || !isAuthChecked) {
+  if (!loaded || !isReady) {
     return null;
   }
 
