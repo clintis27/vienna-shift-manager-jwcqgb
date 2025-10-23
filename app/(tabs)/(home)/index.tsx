@@ -14,7 +14,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, darkColors, commonStyles, buttonStyles } from '@/styles/commonStyles';
-import { getUser, getShifts, saveShifts } from '@/utils/storage';
+import { getUser, getShifts, saveShifts, getNotifications } from '@/utils/storage';
 import { generateMockShifts } from '@/utils/mockData';
 import { User, Shift } from '@/types';
 import { getCategoryColor, getCategoryName } from '@/utils/mockData';
@@ -28,6 +28,7 @@ export default function HomeScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -53,7 +54,13 @@ export default function HomeScreen() {
     }
 
     setShifts(shiftsData);
-    console.log('Loaded shifts:', shiftsData.length);
+
+    // Load unread notifications count
+    const notifications = await getNotifications();
+    const unread = notifications.filter(n => !n.read).length;
+    setUnreadCount(unread);
+
+    console.log('Loaded shifts:', shiftsData.length, 'Unread notifications:', unread);
   };
 
   const onRefresh = async () => {
@@ -117,7 +124,7 @@ export default function HomeScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* Header with Notification Bell */}
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={[styles.title, { color: theme.text }]}>
@@ -127,6 +134,19 @@ export default function HomeScreen() {
               {getCurrentMonth()}
             </Text>
           </View>
+          <TouchableOpacity
+            style={[styles.notificationButton, { backgroundColor: theme.card }]}
+            onPress={() => router.push('/(tabs)/notifications')}
+          >
+            <IconSymbol name="bell" size={24} color={theme.text} />
+            {unreadCount > 0 && (
+              <View style={[styles.badge, { backgroundColor: theme.error }]}>
+                <Text style={[styles.badgeText, { color: theme.card }]}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Mini Calendar Preview */}
@@ -278,10 +298,12 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 24,
-    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   headerText: {
-    alignItems: 'center',
+    flex: 1,
   },
   title: {
     fontSize: 32,
@@ -292,6 +314,31 @@ const styles = StyleSheet.create({
   monthText: {
     fontSize: 17,
     fontWeight: '500',
+  },
+  notificationButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+    elevation: 2,
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   calendarPreview: {
     borderRadius: 20,

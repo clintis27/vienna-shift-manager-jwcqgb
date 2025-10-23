@@ -14,8 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, darkColors, buttonStyles } from '@/styles/commonStyles';
 import { getUser, getShiftRequests, updateShiftRequest, saveShifts, getShifts } from '@/utils/storage';
-import { getCategoryColor, getCategoryName } from '@/utils/mockData';
+import { notifyApproval, notifyShiftChange } from '@/utils/notifications';
 import { User, ShiftRequest, Shift } from '@/types';
+import { getCategoryColor, getCategoryName } from '@/utils/mockData';
 
 export default function AdminScreen() {
   const colorScheme = useColorScheme();
@@ -24,11 +25,6 @@ export default function AdminScreen() {
 
   const [user, setUser] = useState<User | null>(null);
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
-  const [stats, setStats] = useState({
-    pending: 0,
-    approved: 0,
-    rejected: 0,
-  });
 
   useEffect(() => {
     loadData();
@@ -40,54 +36,78 @@ export default function AdminScreen() {
 
     let allRequests = await getShiftRequests();
     
+    // Filter requests based on admin category
     if (userData?.role === 'admin' && userData.category) {
       allRequests = allRequests.filter(r => r.category === userData.category);
     }
 
-    setRequests(allRequests);
-
-    const pending = allRequests.filter(r => r.status === 'pending').length;
-    const approved = allRequests.filter(r => r.status === 'approved').length;
-    const rejected = allRequests.filter(r => r.status === 'rejected').length;
-
-    setStats({ pending, approved, rejected });
-    console.log('Admin loaded requests:', allRequests.length);
+    // Show only pending requests
+    const pendingRequests = allRequests.filter(r => r.status === 'pending');
+    setRequests(pendingRequests);
+    
+    console.log('Loaded shift requests:', pendingRequests.length);
   };
 
   const handleApprove = async (request: ShiftRequest) => {
-    await updateShiftRequest(request.id, 'approved');
-    
-    const shifts = await getShifts();
-    const newShift: Shift = {
-      id: `shift-${Date.now()}`,
-      userId: request.employeeId,
-      date: request.date,
-      startTime: '09:00',
-      endTime: '17:00',
-      department: getCategoryName(request.category),
-      position: 'Staff',
-      status: 'scheduled',
-      category: request.category,
-      color: getCategoryColor(request.category),
-    };
-    
-    await saveShifts([...shifts, newShift]);
-    await loadData();
-    
-    Alert.alert('Success', 'Shift request approved and scheduled');
+    Alert.alert(
+      'Approve Request',
+      `Approve shift request for ${request.userName} on ${request.date}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Approve',
+          onPress: async () => {
+            // Update request status
+            await updateShiftRequest(request.id, { status: 'approved' });
+
+            // Create a new shift
+            const shifts = await getShifts();
+            const newShift: Shift = {
+              id: `shift-${Date.now()}`,
+              userId: request.userId,
+              userName: request.userName,
+              department: getCategoryName(request.category),
+              category: request.category,
+              startTime: request.startTime,
+              endTime: request.endTime,
+              date: request.date,
+              status: 'scheduled',
+              position: 'Staff',
+              color: getCategoryColor(request.category),
+              notes: request.notes,
+            };
+            await saveShifts([...shifts, newShift]);
+
+            // Send notifications
+            const shiftDetails = `${request.date} ${request.startTime}-${request.endTime}`;
+            await notifyApproval(request.userId, 'shift', 'approved', shiftDetails);
+            await notifyShiftChange(request.userId, request.userName, 'new', shiftDetails);
+
+            Alert.alert('Success', 'Shift request approved and scheduled!');
+            await loadData();
+          },
+        },
+      ]
+    );
   };
 
   const handleReject = async (request: ShiftRequest) => {
     Alert.alert(
       'Reject Request',
-      'Are you sure you want to reject this shift request?',
+      `Reject shift request for ${request.userName} on ${request.date}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Reject',
           style: 'destructive',
           onPress: async () => {
-            await updateShiftRequest(request.id, 'rejected');
+            await updateShiftRequest(request.id, { status: 'rejected' });
+
+            // Send notification
+            const shiftDetails = `${request.date} ${request.startTime}-${request.endTime}`;
+            await notifyApproval(request.userId, 'shift', 'rejected', shiftDetails);
+
+            Alert.alert('Request Rejected', 'The shift request has been rejected.');
             await loadData();
           },
         },
@@ -106,90 +126,60 @@ export default function AdminScreen() {
     }
   };
 
-  const pendingRequests = requests.filter(r => r.status === 'pending');
-  const processedRequests = requests.filter(r => r.status !== 'pending');
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.text }]}>
-            Hotel House of Vienna
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: theme.text }]}>
+          Admin Panel
+        </Text>
+        {user?.category && (
+          <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(user.category) }]}>
+            <Text style={[styles.categoryText, { color: theme.card }]}>
+              {getCategoryName(user.category).toUpperCase()}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Pending Requests */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Pending Shift Requests ({requests.length})
           </Text>
-          {user?.category && (
-            <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(user.category) }]}>
-              <Text style={[styles.categoryText, { color: theme.text }]}>
-                {getCategoryName(user.category)} Admin
+
+          {requests.length === 0 ? (
+            <View style={[styles.emptyState, { backgroundColor: theme.card }]}>
+              <IconSymbol name="checkmark.circle" size={64} color={theme.success} />
+              <Text style={[styles.emptyTitle, { color: theme.text }]}>
+                All Caught Up!
+              </Text>
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                No pending shift requests at the moment
               </Text>
             </View>
-          )}
-        </View>
-
-        {/* Add Shift Button */}
-        <TouchableOpacity
-          style={[buttonStyles.primary, styles.addButton]}
-          onPress={() => Alert.alert('Coming Soon', 'Manual shift creation will be available soon')}
-          activeOpacity={0.8}
-        >
-          <IconSymbol name="plus" size={20} color="#FFFFFF" />
-          <Text style={[buttonStyles.textWhite, { marginLeft: 8 }]}>Add Shift</Text>
-        </TouchableOpacity>
-
-        {/* Stats Cards */}
-        <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: theme.card }]}>
-            <View style={[styles.statIcon, { backgroundColor: theme.pastelBlue }]}>
-              <IconSymbol name="house" size={24} color={theme.text} />
-            </View>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Morning Shift</Text>
-          </View>
-
-          <View style={[styles.statCard, { backgroundColor: theme.card }]}>
-            <View style={[styles.statIcon, { backgroundColor: theme.pastelPink }]}>
-              <IconSymbol name="plus.circle" size={24} color={theme.text} />
-            </View>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Afternoon Shift</Text>
-          </View>
-
-          <View style={[styles.statCard, { backgroundColor: theme.card }]}>
-            <View style={[styles.statIcon, { backgroundColor: theme.pastelMint }]}>
-              <IconSymbol name="moon" size={24} color={theme.text} />
-            </View>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Night Shift</Text>
-          </View>
-
-          <View style={[styles.statCard, { backgroundColor: theme.card }]}>
-            <View style={[styles.statIcon, { backgroundColor: theme.pastelPurple }]}>
-              <IconSymbol name="doc.text" size={24} color={theme.text} />
-            </View>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Night Shift</Text>
-          </View>
-        </View>
-
-        {/* Pending Requests */}
-        {pendingRequests.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              Pending Requests ({pendingRequests.length})
-            </Text>
-            {pendingRequests.map(request => (
+          ) : (
+            requests.map((request) => (
               <View
                 key={request.id}
                 style={[styles.requestCard, { backgroundColor: theme.card }]}
               >
                 <View style={styles.requestHeader}>
-                  <View style={[styles.requestIcon, { backgroundColor: theme.pastelYellow }]}>
-                    <IconSymbol name="person" size={20} color={theme.text} />
-                  </View>
+                  <View style={[styles.categoryDot, { backgroundColor: getCategoryColor(request.category) }]} />
                   <View style={styles.requestInfo}>
-                    <Text style={[styles.requestEmployee, { color: theme.text }]}>
-                      Employee #{request.employeeId.slice(-4)}
+                    <Text style={[styles.requestName, { color: theme.text }]}>
+                      {request.userName}
                     </Text>
-                    <Text style={[styles.requestDate, { color: theme.textSecondary }]}>
+                    <Text style={[styles.requestCategory, { color: theme.textSecondary }]}>
+                      {getCategoryName(request.category)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.requestDetails}>
+                  <View style={styles.detailRow}>
+                    <IconSymbol name="calendar" size={16} color={theme.textSecondary} />
+                    <Text style={[styles.detailText, { color: theme.text }]}>
                       {new Date(request.date).toLocaleDateString('en-US', {
                         weekday: 'short',
                         month: 'short',
@@ -197,92 +187,49 @@ export default function AdminScreen() {
                       })}
                     </Text>
                   </View>
+                  <View style={styles.detailRow}>
+                    <IconSymbol name="clock" size={16} color={theme.textSecondary} />
+                    <Text style={[styles.detailText, { color: theme.text }]}>
+                      {request.startTime} - {request.endTime}
+                    </Text>
+                  </View>
                 </View>
+
+                {request.notes && (
+                  <View style={[styles.notesContainer, { backgroundColor: theme.background }]}>
+                    <Text style={[styles.notesText, { color: theme.textSecondary }]}>
+                      {request.notes}
+                    </Text>
+                  </View>
+                )}
 
                 <View style={styles.requestActions}>
                   <TouchableOpacity
-                    style={[styles.actionButton, { backgroundColor: theme.pastelMint }]}
+                    style={[buttonStyles.pastelMint, styles.actionButton]}
                     onPress={() => handleApprove(request)}
-                    activeOpacity={0.8}
                   >
-                    <IconSymbol name="checkmark" size={18} color={theme.text} />
-                    <Text style={[styles.actionButtonText, { color: theme.text }]}>Approve</Text>
+                    <IconSymbol name="checkmark" size={20} color={theme.text} />
+                    <Text style={[buttonStyles.text, { color: theme.text }]}>
+                      Approve
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.actionButton, { backgroundColor: theme.error + '20' }]}
+                    style={[buttonStyles.pastelPink, styles.actionButton]}
                     onPress={() => handleReject(request)}
-                    activeOpacity={0.8}
                   >
-                    <IconSymbol name="xmark" size={18} color={theme.error} />
-                    <Text style={[styles.actionButtonText, { color: theme.error }]}>Reject</Text>
+                    <IconSymbol name="xmark" size={20} color={theme.text} />
+                    <Text style={[buttonStyles.text, { color: theme.text }]}>
+                      Reject
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
-            ))}
-          </View>
-        )}
+            ))
+          )}
+        </View>
 
-        {/* Processed Requests */}
-        {processedRequests.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              Recent Activity
-            </Text>
-            {processedRequests.slice(0, 10).map(request => (
-              <View
-                key={request.id}
-                style={[styles.requestCard, { backgroundColor: theme.card }]}
-              >
-                <View style={styles.requestHeader}>
-                  <View style={[
-                    styles.requestIcon,
-                    { backgroundColor: request.status === 'approved' ? theme.pastelMint : theme.error + '20' }
-                  ]}>
-                    <IconSymbol 
-                      name={request.status === 'approved' ? 'checkmark' : 'xmark'} 
-                      size={20} 
-                      color={request.status === 'approved' ? theme.text : theme.error} 
-                    />
-                  </View>
-                  <View style={styles.requestInfo}>
-                    <Text style={[styles.requestEmployee, { color: theme.text }]}>
-                      Employee #{request.employeeId.slice(-4)}
-                    </Text>
-                    <Text style={[styles.requestDate, { color: theme.textSecondary }]}>
-                      {new Date(request.date).toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </Text>
-                  </View>
-                  <View style={[
-                    styles.statusBadge,
-                    { backgroundColor: getStatusColor(request.status) + '20' }
-                  ]}>
-                    <Text style={[styles.statusText, { color: getStatusColor(request.status) }]}>
-                      {request.status.toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Empty State */}
-        {requests.length === 0 && (
-          <View style={[styles.emptyState, { backgroundColor: theme.card }]}>
-            <IconSymbol name="tray" size={64} color={theme.textTertiary} />
-            <Text style={[styles.emptyTitle, { color: theme.text }]}>No Requests</Text>
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-              Shift requests will appear here
-            </Text>
-          </View>
-        )}
-
-        {/* Bottom Spacing */}
+        {/* Bottom Spacing for Tab Bar */}
         <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
@@ -293,61 +240,29 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContent: {
-    padding: 24,
-  },
   header: {
-    marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
-    marginBottom: 12,
     letterSpacing: -0.5,
-    textAlign: 'center',
   },
   categoryBadge: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 16,
   },
   categoryText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
   },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 32,
-  },
-  statCard: {
-    width: '48%',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    boxShadow: '0px 2px 12px rgba(0, 0, 0, 0.04)',
-    elevation: 1,
-  },
-  statIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  statLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
+  scrollContent: {
+    padding: 24,
   },
   section: {
     marginBottom: 24,
@@ -360,60 +275,67 @@ const styles = StyleSheet.create({
   },
   requestCard: {
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    boxShadow: '0px 2px 12px rgba(0, 0, 0, 0.04)',
-    elevation: 1,
+    padding: 20,
+    marginBottom: 16,
+    boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.06)',
+    elevation: 2,
   },
   requestHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  requestIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  categoryDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     marginRight: 12,
   },
   requestInfo: {
     flex: 1,
   },
-  requestEmployee: {
-    fontSize: 17,
-    fontWeight: '600',
+  requestName: {
+    fontSize: 18,
+    fontWeight: '700',
     marginBottom: 2,
   },
-  requestDate: {
+  requestCategory: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  requestDetails: {
+    flexDirection: 'row',
+    gap: 20,
+    marginBottom: 16,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  detailText: {
     fontSize: 15,
+    fontWeight: '500',
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+  notesContainer: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
   },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '700',
+  notesText: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   requestActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
   },
   actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 6,
-  },
-  actionButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
+    gap: 8,
   },
   emptyState: {
     borderRadius: 20,

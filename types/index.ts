@@ -12,6 +12,14 @@ export interface User {
   phoneNumber?: string;
   avatar?: string;
   createdAt: string;
+  notificationPreferences?: NotificationPreferences;
+}
+
+export interface NotificationPreferences {
+  shiftChanges: boolean;
+  reminders: boolean;
+  approvals: boolean;
+  pushEnabled: boolean;
 }
 
 export interface Shift {
@@ -70,9 +78,10 @@ export interface Notification {
   userId: string;
   title: string;
   message: string;
-  type: 'info' | 'warning' | 'success' | 'error';
+  type: 'shift_change' | 'reminder' | 'approval' | 'info' | 'warning';
   read: boolean;
   createdAt: string;
+  data?: any;
 }
 
 export interface ShiftRequest {
@@ -93,4 +102,22 @@ export interface AvailabilityDay {
   date: string;
   available: boolean;
   notes?: string;
+}
+
+export interface MonthlyReport {
+  id: string;
+  userId: string;
+  userName: string;
+  month: string; // Format: YYYY-MM
+  year: number;
+  totalHours: number;
+  shiftsCompleted: number;
+  dayShifts: number;
+  nightShifts: number;
+  weekendShifts: number;
+  absences: number;
+  approvedLeaves: number;
+  overtimeHours: number;
+  departments: string[];
+  generatedAt: string;
 }

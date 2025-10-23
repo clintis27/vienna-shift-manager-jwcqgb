@@ -1,6 +1,6 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User, Shift, TimeEntry, LeaveRequest, ShiftRequest, AvailabilityDay } from '@/types';
+import { User, Shift, TimeEntry, LeaveRequest, ShiftRequest, AvailabilityDay, Notification, MonthlyReport } from '@/types';
 
 const KEYS = {
   USER: '@user',
@@ -10,6 +10,9 @@ const KEYS = {
   IS_AUTHENTICATED: '@is_authenticated',
   SHIFT_REQUESTS: '@shift_requests',
   AVAILABILITY: '@availability',
+  NOTIFICATIONS: '@notifications',
+  MONTHLY_REPORTS: '@monthly_reports',
+  PUSH_TOKEN: '@push_token',
 };
 
 // User storage
@@ -202,6 +205,115 @@ export const getAvailability = async (): Promise<AvailabilityDay[]> => {
   } catch (error) {
     console.error('Error getting availability:', error);
     return [];
+  }
+};
+
+// Notifications storage
+export const saveNotification = async (notification: Notification): Promise<void> => {
+  try {
+    const notifications = await getNotifications();
+    const updatedNotifications = [notification, ...notifications];
+    await AsyncStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(updatedNotifications));
+    console.log('Notification saved successfully');
+  } catch (error) {
+    console.error('Error saving notification:', error);
+  }
+};
+
+export const getNotifications = async (): Promise<Notification[]> => {
+  try {
+    const notificationsJson = await AsyncStorage.getItem(KEYS.NOTIFICATIONS);
+    return notificationsJson ? JSON.parse(notificationsJson) : [];
+  } catch (error) {
+    console.error('Error getting notifications:', error);
+    return [];
+  }
+};
+
+export const markNotificationAsRead = async (notificationId: string): Promise<void> => {
+  try {
+    const notifications = await getNotifications();
+    const updatedNotifications = notifications.map(notif =>
+      notif.id === notificationId ? { ...notif, read: true } : notif
+    );
+    await AsyncStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(updatedNotifications));
+    console.log('Notification marked as read');
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+  }
+};
+
+export const markAllNotificationsAsRead = async (): Promise<void> => {
+  try {
+    const notifications = await getNotifications();
+    const updatedNotifications = notifications.map(notif => ({ ...notif, read: true }));
+    await AsyncStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(updatedNotifications));
+    console.log('All notifications marked as read');
+  } catch (error) {
+    console.error('Error marking all notifications as read:', error);
+  }
+};
+
+export const deleteNotification = async (notificationId: string): Promise<void> => {
+  try {
+    const notifications = await getNotifications();
+    const updatedNotifications = notifications.filter(notif => notif.id !== notificationId);
+    await AsyncStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(updatedNotifications));
+    console.log('Notification deleted');
+  } catch (error) {
+    console.error('Error deleting notification:', error);
+  }
+};
+
+// Monthly reports storage
+export const saveMonthlyReport = async (report: MonthlyReport): Promise<void> => {
+  try {
+    const reports = await getMonthlyReports();
+    const existingIndex = reports.findIndex(
+      r => r.userId === report.userId && r.month === report.month
+    );
+    
+    let updatedReports;
+    if (existingIndex >= 0) {
+      updatedReports = [...reports];
+      updatedReports[existingIndex] = report;
+    } else {
+      updatedReports = [...reports, report];
+    }
+    
+    await AsyncStorage.setItem(KEYS.MONTHLY_REPORTS, JSON.stringify(updatedReports));
+    console.log('Monthly report saved successfully');
+  } catch (error) {
+    console.error('Error saving monthly report:', error);
+  }
+};
+
+export const getMonthlyReports = async (): Promise<MonthlyReport[]> => {
+  try {
+    const reportsJson = await AsyncStorage.getItem(KEYS.MONTHLY_REPORTS);
+    return reportsJson ? JSON.parse(reportsJson) : [];
+  } catch (error) {
+    console.error('Error getting monthly reports:', error);
+    return [];
+  }
+};
+
+// Push token storage
+export const savePushToken = async (token: string): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(KEYS.PUSH_TOKEN, token);
+    console.log('Push token saved successfully');
+  } catch (error) {
+    console.error('Error saving push token:', error);
+  }
+};
+
+export const getPushToken = async (): Promise<string | null> => {
+  try {
+    return await AsyncStorage.getItem(KEYS.PUSH_TOKEN);
+  } catch (error) {
+    console.error('Error getting push token:', error);
+    return null;
   }
 };
 

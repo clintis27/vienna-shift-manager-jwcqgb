@@ -9,14 +9,16 @@ import {
   Alert,
   useColorScheme,
   Platform,
+  Switch,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, darkColors } from '@/styles/commonStyles';
-import { getUser, removeUser, setAuthenticated, clearAllData } from '@/utils/storage';
-import { User } from '@/types';
+import { getUser, removeUser, setAuthenticated, clearAllData, saveUser } from '@/utils/storage';
+import { User, NotificationPreferences } from '@/types';
 import { getCategoryName, getCategoryColor } from '@/utils/mockData';
+import { registerForPushNotificationsAsync } from '@/utils/notifications';
 
 export default function ProfileScreen() {
   const colorScheme = useColorScheme();
@@ -24,6 +26,12 @@ export default function ProfileScreen() {
   const theme = isDark ? darkColors : colors;
 
   const [user, setUser] = useState<User | null>(null);
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>({
+    shiftChanges: true,
+    reminders: true,
+    approvals: true,
+    pushEnabled: true,
+  });
 
   useEffect(() => {
     loadUser();
@@ -32,7 +40,31 @@ export default function ProfileScreen() {
   const loadUser = async () => {
     const userData = await getUser();
     setUser(userData);
+    
+    if (userData?.notificationPreferences) {
+      setNotificationPrefs(userData.notificationPreferences);
+    }
+    
     console.log('User loaded:', userData?.firstName);
+  };
+
+  const handleNotificationPrefChange = async (
+    key: keyof NotificationPreferences,
+    value: boolean
+  ) => {
+    const newPrefs = { ...notificationPrefs, [key]: value };
+    setNotificationPrefs(newPrefs);
+
+    if (user) {
+      const updatedUser = { ...user, notificationPreferences: newPrefs };
+      await saveUser(updatedUser);
+      setUser(updatedUser);
+    }
+
+    // If enabling push notifications, request permission
+    if (key === 'pushEnabled' && value) {
+      await registerForPushNotificationsAsync();
+    }
   };
 
   const handleLogout = () => {
@@ -185,17 +217,121 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Notification Preferences */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Notification Preferences</Text>
+          
+          <View style={[styles.infoCard, { backgroundColor: theme.card }]}>
+            <View style={styles.prefRow}>
+              <View style={styles.prefLabel}>
+                <IconSymbol name="bell.badge" size={20} color={theme.primary} />
+                <View style={styles.prefText}>
+                  <Text style={[styles.prefTitle, { color: theme.text }]}>
+                    Push Notifications
+                  </Text>
+                  <Text style={[styles.prefDescription, { color: theme.textSecondary }]}>
+                    Receive push notifications on your device
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={notificationPrefs.pushEnabled}
+                onValueChange={(value) => handleNotificationPrefChange('pushEnabled', value)}
+                trackColor={{ false: theme.border, true: theme.primary }}
+                thumbColor={theme.card}
+              />
+            </View>
+
+            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
+            <View style={styles.prefRow}>
+              <View style={styles.prefLabel}>
+                <IconSymbol name="calendar.badge.clock" size={20} color={theme.primary} />
+                <View style={styles.prefText}>
+                  <Text style={[styles.prefTitle, { color: theme.text }]}>
+                    Shift Changes
+                  </Text>
+                  <Text style={[styles.prefDescription, { color: theme.textSecondary }]}>
+                    New shifts, updates, cancellations
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={notificationPrefs.shiftChanges}
+                onValueChange={(value) => handleNotificationPrefChange('shiftChanges', value)}
+                trackColor={{ false: theme.border, true: theme.primary }}
+                thumbColor={theme.card}
+              />
+            </View>
+
+            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
+            <View style={styles.prefRow}>
+              <View style={styles.prefLabel}>
+                <IconSymbol name="clock.badge" size={20} color={theme.primary} />
+                <View style={styles.prefText}>
+                  <Text style={[styles.prefTitle, { color: theme.text }]}>
+                    Reminders
+                  </Text>
+                  <Text style={[styles.prefDescription, { color: theme.textSecondary }]}>
+                    Shift starting soon, break time
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={notificationPrefs.reminders}
+                onValueChange={(value) => handleNotificationPrefChange('reminders', value)}
+                trackColor={{ false: theme.border, true: theme.primary }}
+                thumbColor={theme.card}
+              />
+            </View>
+
+            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
+            <View style={styles.prefRow}>
+              <View style={styles.prefLabel}>
+                <IconSymbol name="checkmark.circle" size={20} color={theme.primary} />
+                <View style={styles.prefText}>
+                  <Text style={[styles.prefTitle, { color: theme.text }]}>
+                    Approvals
+                  </Text>
+                  <Text style={[styles.prefDescription, { color: theme.textSecondary }]}>
+                    Request approvals and rejections
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={notificationPrefs.approvals}
+                onValueChange={(value) => handleNotificationPrefChange('approvals', value)}
+                trackColor={{ false: theme.border, true: theme.primary }}
+                thumbColor={theme.card}
+              />
+            </View>
+          </View>
+        </View>
+
         {/* Settings */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Settings</Text>
           
           <TouchableOpacity
             style={[styles.settingItem, { backgroundColor: theme.card }]}
-            onPress={() => Alert.alert('Coming Soon', 'This feature is not yet implemented')}
+            onPress={() => router.push('/(tabs)/notifications')}
           >
             <IconSymbol name="bell" size={24} color={theme.text} />
             <Text style={[styles.settingText, { color: theme.text }]}>
               Notifications
+            </Text>
+            <IconSymbol name="chevron.right" size={20} color={theme.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingItem, { backgroundColor: theme.card }]}
+            onPress={() => router.push('/(tabs)/reports')}
+          >
+            <IconSymbol name="doc.text" size={24} color={theme.text} />
+            <Text style={[styles.settingText, { color: theme.text }]}>
+              Monthly Reports
             </Text>
             <IconSymbol name="chevron.right" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
@@ -353,6 +489,28 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     marginVertical: 16,
+  },
+  prefRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  prefLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  prefText: {
+    flex: 1,
+  },
+  prefTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  prefDescription: {
+    fontSize: 13,
   },
   settingItem: {
     flexDirection: 'row',

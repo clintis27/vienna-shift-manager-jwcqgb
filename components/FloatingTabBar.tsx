@@ -11,22 +11,20 @@ import {
 import { useRouter, usePathname } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
-import { BlurView } from 'expo-blur';
 import { useTheme } from '@react-navigation/native';
+import { BlurView } from 'expo-blur';
 import Animated, {
-  useAnimatedStyle,
   useSharedValue,
+  useAnimatedStyle,
   withSpring,
   interpolate,
 } from 'react-native-reanimated';
 
-const { width: screenWidth } = Dimensions.get('window');
-
-export interface TabBarItem {
+interface TabBarItem {
   name: string;
-  route: string;
-  icon: string;
   label: string;
+  icon: string;
+  route: string;
 }
 
 interface FloatingTabBarProps {
@@ -38,130 +36,104 @@ interface FloatingTabBarProps {
 
 export default function FloatingTabBar({
   tabs,
-  containerWidth = screenWidth - 48,
+  containerWidth = Dimensions.get('window').width - 48,
   borderRadius = 24,
-  bottomMargin
+  bottomMargin = 16,
 }: FloatingTabBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const theme = useTheme();
-  const animatedValue = useSharedValue(0);
 
-  const activeTabIndex = React.useMemo(() => {
-    let bestMatch = -1;
-    let bestMatchScore = 0;
-
-    tabs.forEach((tab, index) => {
-      let score = 0;
-
-      if (pathname === tab.route) {
-        score = 100;
-      } else if (pathname.startsWith(tab.route)) {
-        score = 80;
-      } else if (pathname.includes(tab.name)) {
-        score = 60;
-      } else if (tab.route.includes('/(tabs)/') && pathname.includes(tab.route.split('/(tabs)/')[1])) {
-        score = 40;
-      }
-
-      if (score > bestMatchScore) {
-        bestMatchScore = score;
-        bestMatch = index;
-      }
-    });
-
-    return bestMatch >= 0 ? bestMatch : 0;
-  }, [pathname, tabs]);
-
-  React.useEffect(() => {
-    if (activeTabIndex >= 0) {
-      animatedValue.value = withSpring(activeTabIndex, {
-        damping: 20,
-        stiffness: 120,
-        mass: 1,
-      });
-    }
-  }, [activeTabIndex, animatedValue]);
+  const activeIndex = tabs.findIndex(tab => pathname.includes(tab.route));
+  const indicatorPosition = useSharedValue(activeIndex >= 0 ? activeIndex : 0);
 
   const handleTabPress = (route: string) => {
-    router.push(route);
+    const newIndex = tabs.findIndex(tab => tab.route === route);
+    indicatorPosition.value = withSpring(newIndex, {
+      damping: 20,
+      stiffness: 90,
+    });
+    router.push(route as any);
   };
 
   const indicatorStyle = useAnimatedStyle(() => {
-    const tabWidth = (containerWidth - 16) / tabs.length;
+    const tabWidth = containerWidth / tabs.length;
     return {
       transform: [
         {
           translateX: interpolate(
-            animatedValue.value,
-            [0, tabs.length - 1],
-            [0, tabWidth * (tabs.length - 1)]
+            indicatorPosition.value,
+            tabs.map((_, i) => i),
+            tabs.map((_, i) => i * tabWidth)
           ),
         },
       ],
     };
   });
 
-  const dynamicStyles = {
-    blurContainer: {
-      ...styles.blurContainer,
-      ...Platform.select({
-        ios: {
-          backgroundColor: theme.dark
-            ? 'rgba(28, 28, 30, 0.85)'
-            : 'rgba(255, 255, 255, 0.85)',
-        },
-        android: {
-          backgroundColor: theme.dark
-            ? 'rgba(28, 28, 30, 0.95)'
-            : 'rgba(255, 255, 255, 0.95)',
-          elevation: 8,
-        },
-        web: {
-          backgroundColor: theme.dark
-            ? 'rgba(28, 28, 30, 0.95)'
-            : 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(20px)',
-          boxShadow: theme.dark
-            ? '0 8px 32px rgba(0, 0, 0, 0.4)'
-            : '0 8px 32px rgba(0, 0, 0, 0.08)',
-        },
-      }),
-    },
-    background: {
-      ...styles.background,
-      backgroundColor: theme.dark
-        ? (Platform.OS === 'ios' ? 'transparent' : 'rgba(28, 28, 30, 0.1)')
-        : (Platform.OS === 'ios' ? 'transparent' : 'rgba(255, 255, 255, 0.1)'),
-    },
-    indicator: {
-      ...styles.indicator,
-      backgroundColor: theme.dark
-        ? 'rgba(255, 255, 255, 0.1)'
-        : 'rgba(0, 0, 0, 0.04)',
-      width: `${(100 / tabs.length) - 2}%`,
-    },
-  };
-
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-      <View style={[
-        styles.container,
-        {
-          width: containerWidth,
-          marginBottom: bottomMargin ?? (Platform.OS === 'ios' ? 10 : 20)
-        }
-      ]}>
-        <BlurView
-          intensity={Platform.OS === 'web' ? 0 : 80}
-          style={[dynamicStyles.blurContainer, { borderRadius }]}
-        >
-          <View style={dynamicStyles.background} />
-          <Animated.View style={[dynamicStyles.indicator, indicatorStyle]} />
-          <View style={styles.tabsContainer}>
-            {tabs.map((tab, index) => {
-              const isActive = activeTabIndex === index;
-
+    <SafeAreaView
+      edges={['bottom']}
+      style={[styles.safeArea, { marginBottom: bottomMargin }]}
+    >
+      <View style={[styles.container, { width: containerWidth, borderRadius }]}>
+        {Platform.OS === 'ios' ? (
+          <BlurView intensity={80} tint={theme.dark ? 'dark' : 'light'} style={styles.blur}>
+            <View style={[styles.content, { backgroundColor: theme.dark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)' }]}>
+              <Animated.View
+                style={[
+                  styles.indicator,
+                  {
+                    width: containerWidth / tabs.length,
+                    backgroundColor: theme.colors.primary,
+                  },
+                  indicatorStyle,
+                ]}
+              />
+              {tabs.map((tab) => {
+                const isActive = pathname.includes(tab.route);
+                return (
+                  <TouchableOpacity
+                    key={tab.name}
+                    style={styles.tab}
+                    onPress={() => handleTabPress(tab.route)}
+                    activeOpacity={0.7}
+                  >
+                    <IconSymbol
+                      name={tab.icon}
+                      size={24}
+                      color={isActive ? theme.colors.primary : theme.colors.text}
+                    />
+                    <Text
+                      style={[
+                        styles.label,
+                        {
+                          color: isActive ? theme.colors.primary : theme.colors.text,
+                          fontWeight: isActive ? '700' : '500',
+                        },
+                      ]}
+                    >
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </BlurView>
+        ) : (
+          <View style={[styles.content, { backgroundColor: theme.colors.card }]}>
+            <Animated.View
+              style={[
+                styles.indicator,
+                {
+                  width: containerWidth / tabs.length,
+                  backgroundColor: theme.colors.primary,
+                },
+                indicatorStyle,
+              ]}
+            />
+            {tabs.map((tab) => {
+              const isActive = pathname.includes(tab.route);
               return (
                 <TouchableOpacity
                   key={tab.name}
@@ -169,27 +141,27 @@ export default function FloatingTabBar({
                   onPress={() => handleTabPress(tab.route)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.tabContent}>
-                    <IconSymbol
-                      name={tab.icon}
-                      size={22}
-                      color={isActive ? theme.colors.primary : (theme.dark ? '#8E8E93' : '#8E8E93')}
-                    />
-                    <Text
-                      style={[
-                        styles.tabLabel,
-                        { color: theme.dark ? '#8E8E93' : '#8E8E93' },
-                        isActive && { color: theme.colors.primary, fontWeight: '600' },
-                      ]}
-                    >
-                      {tab.label}
-                    </Text>
-                  </View>
+                  <IconSymbol
+                    name={tab.icon}
+                    size={24}
+                    color={isActive ? theme.colors.primary : theme.colors.text}
+                  />
+                  <Text
+                    style={[
+                      styles.label,
+                      {
+                        color: isActive ? theme.colors.primary : theme.colors.text,
+                        fontWeight: isActive ? '700' : '500',
+                      },
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-        </BlurView>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -201,45 +173,39 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: 1000,
     alignItems: 'center',
+    pointerEvents: 'box-none',
   },
   container: {
-    marginHorizontal: 24,
-    alignSelf: 'center',
-  },
-  blurContainer: {
     overflow: 'hidden',
+    boxShadow: '0px 8px 32px rgba(0, 0, 0, 0.15)',
+    elevation: 8,
   },
-  background: {
-    ...StyleSheet.absoluteFillObject,
+  blur: {
+    overflow: 'hidden',
+    borderRadius: 24,
+  },
+  content: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    position: 'relative',
   },
   indicator: {
     position: 'absolute',
-    top: 6,
-    left: 8,
-    bottom: 6,
-    borderRadius: 18,
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    height: 64,
-    alignItems: 'center',
-    paddingHorizontal: 8,
+    height: '80%',
+    top: '10%',
+    borderRadius: 16,
+    opacity: 0.15,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
-  },
-  tabContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 4,
   },
-  tabLabel: {
+  label: {
     fontSize: 11,
-    fontWeight: '500',
   },
 });
