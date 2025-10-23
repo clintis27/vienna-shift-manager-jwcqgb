@@ -1,161 +1,351 @@
-import React from "react";
-import { Stack, Link } from "expo-router";
-import { FlatList, Pressable, StyleSheet, View, Text, Alert, Platform } from "react-native";
-import { IconSymbol } from "@/components/IconSymbol";
-import { GlassView } from "expo-glass-effect";
-import { useTheme } from "@react-navigation/native";
 
-const ICON_COLOR = "#007AFF";
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  useColorScheme,
+  RefreshControl,
+  Platform,
+} from 'react-native';
+import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { IconSymbol } from '@/components/IconSymbol';
+import { colors, darkColors, commonStyles } from '@/styles/commonStyles';
+import { getUser, getShifts, saveShifts } from '@/utils/storage';
+import { generateMockShifts } from '@/utils/mockData';
+import { User, Shift } from '@/types';
 
 export default function HomeScreen() {
-  const theme = useTheme();
-  const modalDemos = [
-    {
-      title: "Standard Modal",
-      description: "Full screen modal presentation",
-      route: "/modal",
-      color: "#007AFF",
-    },
-    {
-      title: "Form Sheet",
-      description: "Bottom sheet with detents and grabber",
-      route: "/formsheet",
-      color: "#34C759",
-    },
-    {
-      title: "Transparent Modal",
-      description: "Overlay without obscuring background",
-      route: "/transparent-modal",
-      color: "#FF9500",
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const theme = isDark ? darkColors : colors;
+
+  const [user, setUser] = useState<User | null>(null);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    loadData();
+    
+    // Update time every minute
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const loadData = async () => {
+    console.log('Loading home screen data...');
+    const userData = await getUser();
+    setUser(userData);
+
+    let shiftsData = await getShifts();
+    if (shiftsData.length === 0) {
+      // Generate mock shifts if none exist
+      shiftsData = generateMockShifts(userData?.id);
+      await saveShifts(shiftsData);
     }
-  ];
+    setShifts(shiftsData);
+    console.log('Data loaded:', { user: userData?.firstName, shifts: shiftsData.length });
+  };
 
-  const renderModalDemo = ({ item }: { item: (typeof modalDemos)[0] }) => (
-    <GlassView style={[
-      styles.demoCard,
-      Platform.OS !== 'ios' && { backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }
-    ]} glassEffectStyle="regular">
-      <View style={[styles.demoIcon, { backgroundColor: item.color }]}>
-        <IconSymbol name="square.grid.3x3" color="white" size={24} />
-      </View>
-      <View style={styles.demoContent}>
-        <Text style={[styles.demoTitle, { color: theme.colors.text }]}>{item.title}</Text>
-        <Text style={[styles.demoDescription, { color: theme.dark ? '#98989D' : '#666' }]}>{item.description}</Text>
-      </View>
-      <Link href={item.route as any} asChild>
-        <Pressable>
-          <GlassView style={[
-            styles.tryButton,
-            Platform.OS !== 'ios' && { backgroundColor: theme.dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)' }
-          ]} glassEffectStyle="clear">
-            <Text style={[styles.tryButtonText, { color: theme.colors.primary }]}>Try It</Text>
-          </GlassView>
-        </Pressable>
-      </Link>
-    </GlassView>
-  );
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
-  const renderHeaderRight = () => (
-    <Pressable
-      onPress={() => Alert.alert("Not Implemented", "This feature is not implemented yet")}
-      style={styles.headerButtonContainer}
-    >
-      <IconSymbol name="plus" color={theme.colors.primary} />
-    </Pressable>
-  );
+  const getTodayShifts = () => {
+    const today = new Date().toISOString().split('T')[0];
+    return shifts.filter(shift => shift.date === today);
+  };
 
-  const renderHeaderLeft = () => (
-    <Pressable
-      onPress={() => Alert.alert("Not Implemented", "This feature is not implemented yet")}
-      style={styles.headerButtonContainer}
-    >
-      <IconSymbol
-        name="gear"
-        color={theme.colors.primary}
-      />
-    </Pressable>
-  );
+  const getUpcomingShifts = () => {
+    const today = new Date().toISOString().split('T')[0];
+    return shifts.filter(shift => shift.date > today).slice(0, 5);
+  };
+
+  const formatTime = (time: string) => {
+    return time;
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+      return 'Tomorrow';
+    } else {
+      return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+  };
+
+  const todayShifts = getTodayShifts();
+  const upcomingShifts = getUpcomingShifts();
 
   return (
-    <>
-      {Platform.OS === 'ios' && (
-        <Stack.Screen
-          options={{
-            title: "Building the app...",
-            headerRight: renderHeaderRight,
-            headerLeft: renderHeaderLeft,
-          }}
-        />
-      )}
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <FlatList
-          data={modalDemos}
-          renderItem={renderModalDemo}
-          keyExtractor={(item) => item.route}
-          contentContainerStyle={[
-            styles.listContainer,
-            Platform.OS !== 'ios' && styles.listContainerWithTabBar
-          ]}
-          contentInsetAdjustmentBehavior="automatic"
-          showsVerticalScrollIndicator={false}
-        />
-      </View>
-    </>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={[styles.greeting, { color: theme.textSecondary }]}>
+              {currentTime.getHours() < 12 ? 'Good Morning' : currentTime.getHours() < 18 ? 'Good Afternoon' : 'Good Evening'}
+            </Text>
+            <Text style={[styles.userName, { color: theme.text }]}>
+              {user?.firstName} {user?.lastName}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.profileButton, { backgroundColor: theme.primary }]}
+            onPress={() => router.push('/(tabs)/profile')}
+          >
+            <IconSymbol name="person" size={24} color={theme.card} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: theme.primary }]}
+            onPress={() => router.push('/(tabs)/time-tracking')}
+          >
+            <IconSymbol name="clock" size={32} color={theme.card} />
+            <Text style={[styles.actionText, { color: theme.card }]}>Clock In/Out</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: theme.secondary }]}
+            onPress={() => router.push('/(tabs)/schedule')}
+          >
+            <IconSymbol name="calendar" size={32} color={theme.text} />
+            <Text style={[styles.actionText, { color: theme.text }]}>Schedule</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Today's Shifts */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Today&apos;s Shifts</Text>
+          {todayShifts.length > 0 ? (
+            todayShifts.map((shift) => (
+              <View
+                key={shift.id}
+                style={[
+                  styles.shiftCard,
+                  { backgroundColor: theme.card, borderLeftColor: shift.color || theme.primary }
+                ]}
+              >
+                <View style={styles.shiftHeader}>
+                  <View>
+                    <Text style={[styles.shiftDepartment, { color: theme.text }]}>
+                      {shift.department}
+                    </Text>
+                    <Text style={[styles.shiftPosition, { color: theme.textSecondary }]}>
+                      {shift.position}
+                    </Text>
+                  </View>
+                  <View style={[
+                    styles.statusBadge,
+                    { backgroundColor: shift.status === 'in-progress' ? theme.success : theme.accent }
+                  ]}>
+                    <Text style={[styles.statusText, { color: theme.card }]}>
+                      {shift.status === 'in-progress' ? 'Active' : 'Scheduled'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.shiftTime}>
+                  <IconSymbol name="clock" size={16} color={theme.textSecondary} />
+                  <Text style={[styles.timeText, { color: theme.textSecondary }]}>
+                    {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
+                  </Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
+              <IconSymbol name="calendar" size={48} color={theme.textSecondary} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                No shifts scheduled for today
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Upcoming Shifts */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Upcoming Shifts</Text>
+          {upcomingShifts.map((shift) => (
+            <View
+              key={shift.id}
+              style={[
+                styles.upcomingCard,
+                { backgroundColor: theme.card, borderLeftColor: shift.color || theme.primary }
+              ]}
+            >
+              <View style={styles.upcomingHeader}>
+                <Text style={[styles.upcomingDate, { color: theme.primary }]}>
+                  {formatDate(shift.date)}
+                </Text>
+                <Text style={[styles.upcomingTime, { color: theme.textSecondary }]}>
+                  {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
+                </Text>
+              </View>
+              <Text style={[styles.upcomingDepartment, { color: theme.text }]}>
+                {shift.department} • {shift.position}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    // backgroundColor handled dynamically
   },
-  listContainer: {
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+  scrollContent: {
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 100,
   },
-  listContainerWithTabBar: {
-    paddingBottom: 100, // Extra padding for floating tab bar
-  },
-  demoCard: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+  header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 24,
   },
-  demoIcon: {
+  greeting: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  profileButton: {
     width: 48,
     height: 48,
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
   },
-  demoContent: {
+  quickActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 32,
+  },
+  actionCard: {
     flex: 1,
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 120,
   },
-  demoTitle: {
+  actionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  shiftCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+    elevation: 2,
+  },
+  shiftHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  shiftDepartment: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 4,
-    // color handled dynamically
   },
-  demoDescription: {
+  shiftPosition: {
     fontSize: 14,
-    lineHeight: 18,
-    // color handled dynamically
+    marginTop: 4,
   },
-  headerButtonContainer: {
-    padding: 6,
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  tryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
-  tryButtonText: {
+  shiftTime: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timeText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  upcomingCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+    elevation: 2,
+  },
+  upcomingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  upcomingDate: {
     fontSize: 14,
     fontWeight: '600',
-    // color handled dynamically
+  },
+  upcomingTime: {
+    fontSize: 14,
+  },
+  upcomingDepartment: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  emptyCard: {
+    padding: 32,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    marginTop: 12,
+    textAlign: 'center',
   },
 });
