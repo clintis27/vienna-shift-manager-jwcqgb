@@ -28,6 +28,17 @@ export default function AvailabilityScreen() {
   const [availability, setAvailability] = useState<AvailabilityDay[]>([]);
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
 
+  const getStatusColor = useCallback((status: string) => {
+    switch (status) {
+      case 'approved':
+        return theme.success;
+      case 'rejected':
+        return theme.error;
+      default:
+        return theme.warning;
+    }
+  }, [theme.success, theme.error, theme.warning]);
+
   const loadData = useCallback(async () => {
     const userData = await getUser();
     setUser(userData);
@@ -50,7 +61,7 @@ export default function AvailabilityScreen() {
 
     setSelectedDates(marked);
     console.log('Loaded availability and requests');
-  }, []);
+  }, [getStatusColor]);
 
   useEffect(() => {
     loadData();
@@ -107,17 +118,6 @@ export default function AvailabilityScreen() {
     );
 
     await loadData();
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return theme.success;
-      case 'rejected':
-        return theme.error;
-      default:
-        return theme.warning;
-    }
   };
 
   const getRequestForDate = (dateStr: string): ShiftRequest | undefined => {

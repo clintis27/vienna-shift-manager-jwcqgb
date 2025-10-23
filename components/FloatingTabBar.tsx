@@ -50,10 +50,17 @@ export default function FloatingTabBar({
   const activeIndex = tabs.findIndex(tab => pathname.includes(tab.route));
   const indicatorPosition = useSharedValue(activeIndex >= 0 ? activeIndex : 0);
   
-  // Create all tab scale shared values at the top level
+  // Create all tab scale shared values at the top level - moved outside useMemo
+  const tabScale0 = useSharedValue(1);
+  const tabScale1 = useSharedValue(1);
+  const tabScale2 = useSharedValue(1);
+  const tabScale3 = useSharedValue(1);
+  const tabScale4 = useSharedValue(1);
+  const tabScale5 = useSharedValue(1);
+
   const tabScales = useMemo(() => {
-    return tabs.map(() => useSharedValue(1));
-  }, [tabs.length]);
+    return [tabScale0, tabScale1, tabScale2, tabScale3, tabScale4, tabScale5].slice(0, tabs.length);
+  }, [tabs.length, tabScale0, tabScale1, tabScale2, tabScale3, tabScale4, tabScale5]);
 
   useEffect(() => {
     const newIndex = tabs.findIndex(tab => pathname.includes(tab.route));
@@ -94,14 +101,29 @@ export default function FloatingTabBar({
     };
   });
 
-  // Create all animated tab styles at the top level
+  // Create all animated tab styles at the top level - moved outside useMemo
+  const animatedTabStyle0 = useAnimatedStyle(() => ({
+    transform: [{ scale: tabScale0.value }],
+  }));
+  const animatedTabStyle1 = useAnimatedStyle(() => ({
+    transform: [{ scale: tabScale1.value }],
+  }));
+  const animatedTabStyle2 = useAnimatedStyle(() => ({
+    transform: [{ scale: tabScale2.value }],
+  }));
+  const animatedTabStyle3 = useAnimatedStyle(() => ({
+    transform: [{ scale: tabScale3.value }],
+  }));
+  const animatedTabStyle4 = useAnimatedStyle(() => ({
+    transform: [{ scale: tabScale4.value }],
+  }));
+  const animatedTabStyle5 = useAnimatedStyle(() => ({
+    transform: [{ scale: tabScale5.value }],
+  }));
+
   const animatedTabStyles = useMemo(() => {
-    return tabs.map((_, index) => {
-      return useAnimatedStyle(() => ({
-        transform: [{ scale: tabScales[index].value }],
-      }));
-    });
-  }, [tabs.length, tabScales]);
+    return [animatedTabStyle0, animatedTabStyle1, animatedTabStyle2, animatedTabStyle3, animatedTabStyle4, animatedTabStyle5].slice(0, tabs.length);
+  }, [tabs.length, animatedTabStyle0, animatedTabStyle1, animatedTabStyle2, animatedTabStyle3, animatedTabStyle4, animatedTabStyle5]);
 
   return (
     <SafeAreaView
