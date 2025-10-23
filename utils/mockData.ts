@@ -1,7 +1,7 @@
 
-import { User, Shift, Department } from '@/types';
+import { User, Shift, Department, EmployeeCategory } from '@/types';
 
-// Mock users for demo
+// Mock users for demo - now with categories
 export const mockUsers: User[] = [
   {
     id: '1',
@@ -15,42 +15,70 @@ export const mockUsers: User[] = [
   },
   {
     id: '2',
-    email: 'manager@vienna.com',
+    email: 'breakfast-admin@vienna.com',
     firstName: 'Maria',
     lastName: 'Schmidt',
-    role: 'manager',
-    department: 'Front Desk',
+    role: 'admin',
+    category: 'breakfast',
+    department: 'Breakfast',
     phoneNumber: '+43 1 234 5679',
     createdAt: new Date().toISOString(),
   },
   {
     id: '3',
-    email: 'employee@vienna.com',
+    email: 'housekeeping-admin@vienna.com',
     firstName: 'Hans',
     lastName: 'Müller',
-    role: 'employee',
+    role: 'admin',
+    category: 'housekeeping',
     department: 'Housekeeping',
     phoneNumber: '+43 1 234 5680',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: '4',
+    email: 'frontdesk-admin@vienna.com',
+    firstName: 'Anna',
+    lastName: 'Weber',
+    role: 'admin',
+    category: 'frontdesk',
+    department: 'Front Desk',
+    phoneNumber: '+43 1 234 5681',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: '5',
+    email: 'employee@vienna.com',
+    firstName: 'Peter',
+    lastName: 'Fischer',
+    role: 'employee',
+    category: 'breakfast',
+    department: 'Breakfast',
+    phoneNumber: '+43 1 234 5682',
     createdAt: new Date().toISOString(),
   },
 ];
 
 // Mock departments
 export const mockDepartments: Department[] = [
-  { id: '1', name: 'Front Desk', color: '#1976D2', managerIds: ['2'] },
-  { id: '2', name: 'Housekeeping', color: '#388E3C', managerIds: ['2'] },
-  { id: '3', name: 'Restaurant', color: '#F57C00', managerIds: ['2'] },
-  { id: '4', name: 'Maintenance', color: '#7B1FA2', managerIds: ['2'] },
-  { id: '5', name: 'Management', color: '#C62828', managerIds: ['1'] },
+  { id: '1', name: 'Breakfast', color: '#F57C00', managerIds: ['2'] },
+  { id: '2', name: 'Housekeeping', color: '#388E3C', managerIds: ['3'] },
+  { id: '3', name: 'Front Desk', color: '#1976D2', managerIds: ['4'] },
 ];
 
 // Generate mock shifts for the next 7 days
-export const generateMockShifts = (userId?: string): Shift[] => {
+export const generateMockShifts = (userId?: string, category?: EmployeeCategory): Shift[] => {
   const shifts: Shift[] = [];
   const today = new Date();
-  const departments = ['Front Desk', 'Housekeeping', 'Restaurant', 'Maintenance'];
-  const positions = ['Receptionist', 'Housekeeper', 'Waiter', 'Technician'];
-  const colors = ['#1976D2', '#388E3C', '#F57C00', '#7B1FA2'];
+  
+  const categoryData: Record<EmployeeCategory, { department: string; position: string; color: string }> = {
+    breakfast: { department: 'Breakfast', position: 'Breakfast Server', color: '#F57C00' },
+    housekeeping: { department: 'Housekeeping', position: 'Housekeeper', color: '#388E3C' },
+    frontdesk: { department: 'Front Desk', position: 'Receptionist', color: '#1976D2' },
+  };
+
+  const userCategory = category || 'breakfast';
+  const data = categoryData[userCategory];
 
   for (let i = 0; i < 7; i++) {
     const date = new Date(today);
@@ -60,15 +88,16 @@ export const generateMockShifts = (userId?: string): Shift[] => {
     // Morning shift
     shifts.push({
       id: `shift-${i}-morning`,
-      userId: userId || '3',
-      userName: 'Hans Müller',
-      department: departments[i % departments.length],
+      userId: userId || '5',
+      userName: 'Peter Fischer',
+      department: data.department,
+      category: userCategory,
       startTime: '08:00',
       endTime: '16:00',
       date: dateStr,
       status: i === 0 ? 'in-progress' : 'scheduled',
-      position: positions[i % positions.length],
-      color: colors[i % colors.length],
+      position: data.position,
+      color: data.color,
       notes: i === 0 ? 'Current shift' : undefined,
     });
 
@@ -76,15 +105,16 @@ export const generateMockShifts = (userId?: string): Shift[] => {
     if (i % 2 === 0) {
       shifts.push({
         id: `shift-${i}-evening`,
-        userId: userId || '3',
-        userName: 'Hans Müller',
-        department: departments[(i + 1) % departments.length],
+        userId: userId || '5',
+        userName: 'Peter Fischer',
+        department: data.department,
+        category: userCategory,
         startTime: '16:00',
         endTime: '00:00',
         date: dateStr,
         status: 'scheduled',
-        position: positions[(i + 1) % positions.length],
-        color: colors[(i + 1) % colors.length],
+        position: data.position,
+        color: data.color,
       });
     }
   }
@@ -113,9 +143,16 @@ export const registerUser = (
   email: string,
   password: string,
   firstName: string,
-  lastName: string
+  lastName: string,
+  category: EmployeeCategory
 ): User => {
   console.log('Registering new user:', email);
+  
+  const categoryDepartments: Record<EmployeeCategory, string> = {
+    breakfast: 'Breakfast',
+    housekeeping: 'Housekeeping',
+    frontdesk: 'Front Desk',
+  };
   
   const newUser: User = {
     id: Date.now().toString(),
@@ -123,10 +160,29 @@ export const registerUser = (
     firstName,
     lastName,
     role: 'employee',
-    department: 'Front Desk',
+    category,
+    department: categoryDepartments[category],
     createdAt: new Date().toISOString(),
   };
   
   console.log('User registered successfully:', newUser.firstName);
   return newUser;
+};
+
+export const getCategoryColor = (category: EmployeeCategory): string => {
+  const colors: Record<EmployeeCategory, string> = {
+    breakfast: '#F57C00',
+    housekeeping: '#388E3C',
+    frontdesk: '#1976D2',
+  };
+  return colors[category];
+};
+
+export const getCategoryName = (category: EmployeeCategory): string => {
+  const names: Record<EmployeeCategory, string> = {
+    breakfast: 'Breakfast',
+    housekeeping: 'Housekeeping',
+    frontdesk: 'Front Desk',
+  };
+  return names[category];
 };

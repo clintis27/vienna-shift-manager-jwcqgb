@@ -1,6 +1,6 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User, Shift, TimeEntry, LeaveRequest } from '@/types';
+import { User, Shift, TimeEntry, LeaveRequest, ShiftRequest, AvailabilityDay } from '@/types';
 
 const KEYS = {
   USER: '@user',
@@ -8,6 +8,8 @@ const KEYS = {
   TIME_ENTRIES: '@time_entries',
   LEAVE_REQUESTS: '@leave_requests',
   IS_AUTHENTICATED: '@is_authenticated',
+  SHIFT_REQUESTS: '@shift_requests',
+  AVAILABILITY: '@availability',
 };
 
 // User storage
@@ -131,6 +133,74 @@ export const getLeaveRequests = async (): Promise<LeaveRequest[]> => {
     return requestsJson ? JSON.parse(requestsJson) : [];
   } catch (error) {
     console.error('Error getting leave requests:', error);
+    return [];
+  }
+};
+
+// Shift requests storage
+export const saveShiftRequest = async (request: ShiftRequest): Promise<void> => {
+  try {
+    const requests = await getShiftRequests();
+    const updatedRequests = [...requests, request];
+    await AsyncStorage.setItem(KEYS.SHIFT_REQUESTS, JSON.stringify(updatedRequests));
+    console.log('Shift request saved successfully');
+  } catch (error) {
+    console.error('Error saving shift request:', error);
+  }
+};
+
+export const getShiftRequests = async (): Promise<ShiftRequest[]> => {
+  try {
+    const requestsJson = await AsyncStorage.getItem(KEYS.SHIFT_REQUESTS);
+    return requestsJson ? JSON.parse(requestsJson) : [];
+  } catch (error) {
+    console.error('Error getting shift requests:', error);
+    return [];
+  }
+};
+
+export const updateShiftRequest = async (requestId: string, updates: Partial<ShiftRequest>): Promise<void> => {
+  try {
+    const requests = await getShiftRequests();
+    const updatedRequests = requests.map(request => 
+      request.id === requestId ? { ...request, ...updates } : request
+    );
+    await AsyncStorage.setItem(KEYS.SHIFT_REQUESTS, JSON.stringify(updatedRequests));
+    console.log('Shift request updated successfully');
+  } catch (error) {
+    console.error('Error updating shift request:', error);
+  }
+};
+
+// Availability storage
+export const saveAvailability = async (availability: AvailabilityDay): Promise<void> => {
+  try {
+    const availabilities = await getAvailability();
+    const existingIndex = availabilities.findIndex(
+      a => a.userId === availability.userId && a.date === availability.date
+    );
+    
+    let updatedAvailabilities;
+    if (existingIndex >= 0) {
+      updatedAvailabilities = [...availabilities];
+      updatedAvailabilities[existingIndex] = availability;
+    } else {
+      updatedAvailabilities = [...availabilities, availability];
+    }
+    
+    await AsyncStorage.setItem(KEYS.AVAILABILITY, JSON.stringify(updatedAvailabilities));
+    console.log('Availability saved successfully');
+  } catch (error) {
+    console.error('Error saving availability:', error);
+  }
+};
+
+export const getAvailability = async (): Promise<AvailabilityDay[]> => {
+  try {
+    const availabilityJson = await AsyncStorage.getItem(KEYS.AVAILABILITY);
+    return availabilityJson ? JSON.parse(availabilityJson) : [];
+  } catch (error) {
+    console.error('Error getting availability:', error);
     return [];
   }
 };

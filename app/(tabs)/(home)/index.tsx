@@ -17,6 +17,7 @@ import { colors, darkColors, commonStyles } from '@/styles/commonStyles';
 import { getUser, getShifts, saveShifts } from '@/utils/storage';
 import { generateMockShifts } from '@/utils/mockData';
 import { User, Shift } from '@/types';
+import { getCategoryColor, getCategoryName } from '@/utils/mockData';
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -26,32 +27,36 @@ export default function HomeScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
     loadData();
-    
-    // Update time every minute
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000);
-
-    return () => clearInterval(timer);
   }, []);
 
   const loadData = async () => {
-    console.log('Loading home screen data...');
     const userData = await getUser();
     setUser(userData);
 
     let shiftsData = await getShifts();
-    if (shiftsData.length === 0) {
-      // Generate mock shifts if none exist
-      shiftsData = generateMockShifts(userData?.id);
+    
+    // If no shifts exist, generate mock data
+    if (shiftsData.length === 0 && userData) {
+      shiftsData = generateMockShifts(userData.id, userData.category);
       await saveShifts(shiftsData);
     }
+
+    // Filter shifts by user and category
+    if (userData) {
+      if (userData.role === 'admin' && userData.category) {
+        // Admins see all shifts in their category
+        shiftsData = shiftsData.filter(s => s.category === userData.category);
+      } else {
+        // Employees see only their shifts
+        shiftsData = shiftsData.filter(s => s.userId === userData.id);
+      }
+    }
+
     setShifts(shiftsData);
-    console.log('Data loaded:', { user: userData?.firstName, shifts: shiftsData.length });
+    console.log('Loaded shifts:', shiftsData.length);
   };
 
   const onRefresh = async () => {
@@ -60,33 +65,30 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  const getTodayShifts = () => {
+  const getTodayShifts = (): Shift[] => {
     const today = new Date().toISOString().split('T')[0];
     return shifts.filter(shift => shift.date === today);
   };
 
-  const getUpcomingShifts = () => {
+  const getUpcomingShifts = (): Shift[] => {
     const today = new Date().toISOString().split('T')[0];
-    return shifts.filter(shift => shift.date > today).slice(0, 5);
+    return shifts
+      .filter(shift => shift.date > today)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(0, 5);
   };
 
-  const formatTime = (time: string) => {
+  const formatTime = (time: string): string => {
     return time;
   };
 
-  const formatDate = (dateStr: string) => {
+  const formatDate = (dateStr: string): string => {
     const date = new Date(dateStr);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Tomorrow';
-    } else {
-      return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-    }
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
   };
 
   const todayShifts = getTodayShifts();
@@ -104,18 +106,24 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View>
             <Text style={[styles.greeting, { color: theme.textSecondary }]}>
-              {currentTime.getHours() < 12 ? 'Good Morning' : currentTime.getHours() < 18 ? 'Good Afternoon' : 'Good Evening'}
+              Welcome back,
             </Text>
             <Text style={[styles.userName, { color: theme.text }]}>
               {user?.firstName} {user?.lastName}
             </Text>
+            {user?.category && (
+              <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(user.category) }]}>
+                <Text style={[styles.categoryText, { color: theme.card }]}>
+                  {getCategoryName(user.category)}
+                </Text>
+              </View>
+            )}
           </View>
-          <TouchableOpacity
-            style={[styles.profileButton, { backgroundColor: theme.primary }]}
-            onPress={() => router.push('/(tabs)/profile')}
-          >
-            <IconSymbol name="person" size={24} color={theme.card} />
-          </TouchableOpacity>
+          <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
+            <Text style={[styles.avatarText, { color: theme.card }]}>
+              {user?.firstName?.[0]}{user?.lastName?.[0]}
+            </Text>
+          </View>
         </View>
 
         {/* Quick Actions */}
@@ -129,19 +137,44 @@ export default function HomeScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: theme.secondary }]}
+            style={[styles.actionCard, { backgroundColor: theme.success }]}
             onPress={() => router.push('/(tabs)/schedule')}
           >
-            <IconSymbol name="calendar" size={32} color={theme.text} />
-            <Text style={[styles.actionText, { color: theme.text }]}>Schedule</Text>
+            <IconSymbol name="calendar" size={32} color={theme.card} />
+            <Text style={[styles.actionText, { color: theme.card }]}>View Schedule</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: theme.warning }]}
+            onPress={() => router.push('/(tabs)/availability')}
+          >
+            <IconSymbol name="calendar.badge.plus" size={32} color={theme.card} />
+            <Text style={[styles.actionText, { color: theme.card }]}>Book Shifts</Text>
+          </TouchableOpacity>
+
+          {user?.role === 'admin' && (
+            <TouchableOpacity
+              style={[styles.actionCard, { backgroundColor: theme.error }]}
+              onPress={() => router.push('/(tabs)/admin')}
+            >
+              <IconSymbol name="person.2" size={32} color={theme.card} />
+              <Text style={[styles.actionText, { color: theme.card }]}>Admin Panel</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Today's Shifts */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Today&apos;s Shifts</Text>
-          {todayShifts.length > 0 ? (
-            todayShifts.map((shift) => (
+          {todayShifts.length === 0 ? (
+            <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
+              <IconSymbol name="calendar" size={48} color={theme.textSecondary} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                No shifts scheduled for today
+              </Text>
+            </View>
+          ) : (
+            todayShifts.map(shift => (
               <View
                 key={shift.id}
                 style={[
@@ -150,65 +183,76 @@ export default function HomeScreen() {
                 ]}
               >
                 <View style={styles.shiftHeader}>
-                  <View>
-                    <Text style={[styles.shiftDepartment, { color: theme.text }]}>
-                      {shift.department}
-                    </Text>
-                    <Text style={[styles.shiftPosition, { color: theme.textSecondary }]}>
-                      {shift.position}
-                    </Text>
-                  </View>
+                  <Text style={[styles.shiftDepartment, { color: theme.text }]}>
+                    {shift.department}
+                  </Text>
                   <View style={[
                     styles.statusBadge,
-                    { backgroundColor: shift.status === 'in-progress' ? theme.success : theme.accent }
+                    { backgroundColor: shift.status === 'in-progress' ? theme.success : theme.primary }
                   ]}>
                     <Text style={[styles.statusText, { color: theme.card }]}>
-                      {shift.status === 'in-progress' ? 'Active' : 'Scheduled'}
+                      {shift.status === 'in-progress' ? 'IN PROGRESS' : 'SCHEDULED'}
                     </Text>
                   </View>
                 </View>
+                <Text style={[styles.shiftPosition, { color: theme.textSecondary }]}>
+                  {shift.position}
+                </Text>
                 <View style={styles.shiftTime}>
                   <IconSymbol name="clock" size={16} color={theme.textSecondary} />
-                  <Text style={[styles.timeText, { color: theme.textSecondary }]}>
+                  <Text style={[styles.shiftTimeText, { color: theme.textSecondary }]}>
                     {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
                   </Text>
                 </View>
+                {shift.notes && (
+                  <Text style={[styles.shiftNotes, { color: theme.textSecondary }]}>
+                    {shift.notes}
+                  </Text>
+                )}
               </View>
             ))
-          ) : (
-            <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
-              <IconSymbol name="calendar" size={48} color={theme.textSecondary} />
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                No shifts scheduled for today
-              </Text>
-            </View>
           )}
         </View>
 
         {/* Upcoming Shifts */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Upcoming Shifts</Text>
-          {upcomingShifts.map((shift) => (
-            <View
-              key={shift.id}
-              style={[
-                styles.upcomingCard,
-                { backgroundColor: theme.card, borderLeftColor: shift.color || theme.primary }
-              ]}
-            >
-              <View style={styles.upcomingHeader}>
-                <Text style={[styles.upcomingDate, { color: theme.primary }]}>
-                  {formatDate(shift.date)}
-                </Text>
-                <Text style={[styles.upcomingTime, { color: theme.textSecondary }]}>
-                  {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
-                </Text>
-              </View>
-              <Text style={[styles.upcomingDepartment, { color: theme.text }]}>
-                {shift.department} • {shift.position}
+          {upcomingShifts.length === 0 ? (
+            <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
+              <IconSymbol name="calendar" size={48} color={theme.textSecondary} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                No upcoming shifts
               </Text>
             </View>
-          ))}
+          ) : (
+            upcomingShifts.map(shift => (
+              <View
+                key={shift.id}
+                style={[
+                  styles.shiftCard,
+                  { backgroundColor: theme.card, borderLeftColor: shift.color || theme.primary }
+                ]}
+              >
+                <View style={styles.shiftHeader}>
+                  <Text style={[styles.shiftDate, { color: theme.text }]}>
+                    {formatDate(shift.date)}
+                  </Text>
+                  <Text style={[styles.shiftDepartment, { color: theme.textSecondary }]}>
+                    {shift.department}
+                  </Text>
+                </View>
+                <Text style={[styles.shiftPosition, { color: theme.textSecondary }]}>
+                  {shift.position}
+                </Text>
+                <View style={styles.shiftTime}>
+                  <IconSymbol name="clock" size={16} color={theme.textSecondary} />
+                  <Text style={[styles.shiftTimeText, { color: theme.textSecondary }]}>
+                    {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -226,42 +270,58 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 24,
   },
   greeting: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '500',
   },
   userName: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
-    marginTop: 4,
+    marginBottom: 8,
   },
-  profileButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  categoryBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  categoryText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: '700',
   },
   quickActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
-    marginBottom: 32,
+    marginBottom: 24,
   },
   actionCard: {
     flex: 1,
+    minWidth: '45%',
     padding: 20,
     borderRadius: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 120,
+    gap: 8,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+    elevation: 2,
   },
   actionText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    marginTop: 12,
     textAlign: 'center',
   },
   section: {
@@ -272,27 +332,39 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 12,
   },
+  emptyCard: {
+    padding: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+    elevation: 1,
+  },
+  emptyText: {
+    fontSize: 16,
+    marginTop: 12,
+    textAlign: 'center',
+  },
   shiftCard: {
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
     borderLeftWidth: 4,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 2,
   },
   shiftHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 8,
   },
   shiftDepartment: {
     fontSize: 18,
     fontWeight: '600',
   },
-  shiftPosition: {
-    fontSize: 14,
-    marginTop: 4,
+  shiftDate: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -300,52 +372,24 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  shiftPosition: {
+    fontSize: 14,
+    marginBottom: 8,
   },
   shiftTime: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  timeText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  upcomingCard: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
-  },
-  upcomingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  upcomingDate: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  upcomingTime: {
+  shiftTimeText: {
     fontSize: 14,
   },
-  upcomingDepartment: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  emptyCard: {
-    padding: 32,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    marginTop: 12,
-    textAlign: 'center',
+  shiftNotes: {
+    fontSize: 12,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 });

@@ -1,10 +1,13 @@
 
+export type EmployeeCategory = 'breakfast' | 'housekeeping' | 'frontdesk';
+
 export interface User {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
   role: 'admin' | 'manager' | 'employee';
+  category?: EmployeeCategory; // Category for employees and category-specific admins
   department?: string;
   phoneNumber?: string;
   avatar?: string;
@@ -16,10 +19,11 @@ export interface Shift {
   userId: string;
   userName: string;
   department: string;
+  category: EmployeeCategory; // Added category to shifts
   startTime: string;
   endTime: string;
   date: string;
-  status: 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
+  status: 'scheduled' | 'in-progress' | 'completed' | 'cancelled' | 'requested' | 'approved' | 'rejected';
   position: string;
   notes?: string;
   color?: string;
@@ -69,4 +73,24 @@ export interface Notification {
   type: 'info' | 'warning' | 'success' | 'error';
   read: boolean;
   createdAt: string;
+}
+
+export interface ShiftRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  category: EmployeeCategory;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  notes?: string;
+}
+
+export interface AvailabilityDay {
+  userId: string;
+  date: string;
+  available: boolean;
+  notes?: string;
 }

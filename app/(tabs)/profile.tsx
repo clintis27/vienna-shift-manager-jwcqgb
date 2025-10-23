@@ -16,6 +16,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, darkColors } from '@/styles/commonStyles';
 import { getUser, removeUser, setAuthenticated, clearAllData } from '@/utils/storage';
 import { User } from '@/types';
+import { getCategoryName, getCategoryColor } from '@/utils/mockData';
 
 export default function ProfileScreen() {
   const colorScheme = useColorScheme();
@@ -100,10 +101,19 @@ export default function ProfileScreen() {
           <Text style={[styles.email, { color: theme.textSecondary }]}>
             {user?.email}
           </Text>
-          <View style={[styles.roleBadge, { backgroundColor: getRoleBadgeColor(user?.role || 'employee') }]}>
-            <Text style={[styles.roleText, { color: theme.card }]}>
-              {user?.role?.toUpperCase()}
-            </Text>
+          <View style={styles.badges}>
+            <View style={[styles.roleBadge, { backgroundColor: getRoleBadgeColor(user?.role || 'employee') }]}>
+              <Text style={[styles.roleText, { color: theme.card }]}>
+                {user?.role?.toUpperCase()}
+              </Text>
+            </View>
+            {user?.category && (
+              <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(user.category) }]}>
+                <Text style={[styles.categoryText, { color: theme.card }]}>
+                  {getCategoryName(user.category).toUpperCase()}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -112,6 +122,23 @@ export default function ProfileScreen() {
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Information</Text>
           
           <View style={[styles.infoCard, { backgroundColor: theme.card }]}>
+            {user?.category && (
+              <>
+                <View style={styles.infoRow}>
+                  <IconSymbol name="tag" size={20} color={theme.primary} />
+                  <View style={styles.infoContent}>
+                    <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
+                      Category
+                    </Text>
+                    <Text style={[styles.infoValue, { color: theme.text }]}>
+                      {getCategoryName(user.category)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
+              </>
+            )}
+
             <View style={styles.infoRow}>
               <IconSymbol name="building.2" size={20} color={theme.primary} />
               <View style={styles.infoContent}>
@@ -270,12 +297,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 12,
   },
+  badges: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   roleBadge: {
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 16,
   },
   roleText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  categoryBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  categoryText: {
     fontSize: 12,
     fontWeight: '700',
   },

@@ -18,6 +18,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, darkColors, buttonStyles } from '@/styles/commonStyles';
 import { registerUser } from '@/utils/mockData';
 import { saveUser, setAuthenticated } from '@/utils/storage';
+import { EmployeeCategory } from '@/types';
 
 export default function RegisterScreen() {
   const colorScheme = useColorScheme();
@@ -29,8 +30,15 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [category, setCategory] = useState<EmployeeCategory>('breakfast');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const categories: { value: EmployeeCategory; label: string; icon: string }[] = [
+    { value: 'breakfast', label: 'Breakfast', icon: 'cup.and.saucer' },
+    { value: 'housekeeping', label: 'Housekeeping', icon: 'bed.double' },
+    { value: 'frontdesk', label: 'Front Desk', icon: 'person.2' },
+  ];
 
   const handleRegister = async () => {
     if (!firstName || !lastName || !email || !password || !confirmPassword) {
@@ -53,7 +61,7 @@ export default function RegisterScreen() {
 
     // Simulate API call
     setTimeout(async () => {
-      const user = registerUser(email, password, firstName, lastName);
+      const user = registerUser(email, password, firstName, lastName, category);
       await saveUser(user);
       await setAuthenticated(true);
       console.log('Registration successful, navigating to home');
@@ -124,6 +132,36 @@ export default function RegisterScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
               />
+            </View>
+
+            {/* Category Selection */}
+            <Text style={[styles.label, { color: theme.text }]}>Select Category</Text>
+            <View style={styles.categoryContainer}>
+              {categories.map((cat) => (
+                <TouchableOpacity
+                  key={cat.value}
+                  style={[
+                    styles.categoryButton,
+                    { 
+                      backgroundColor: category === cat.value ? theme.primary : theme.card,
+                      borderColor: theme.border,
+                    }
+                  ]}
+                  onPress={() => setCategory(cat.value)}
+                >
+                  <IconSymbol 
+                    name={cat.icon} 
+                    size={24} 
+                    color={category === cat.value ? theme.card : theme.text} 
+                  />
+                  <Text style={[
+                    styles.categoryText,
+                    { color: category === cat.value ? theme.card : theme.text }
+                  ]}>
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
             <View style={styles.inputContainer}>
@@ -225,6 +263,29 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 12,
     fontSize: 16,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  categoryContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  categoryButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   linkText: {
     fontSize: 14,
