@@ -11,12 +11,12 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Calendar, DateData } from 'react-native-calendars';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, darkColors } from '@/styles/commonStyles';
+import { colors, darkColors, buttonStyles } from '@/styles/commonStyles';
+import { Calendar, DateData } from 'react-native-calendars';
 import { getUser, saveAvailability, getAvailability, saveShiftRequest, getShiftRequests } from '@/utils/storage';
-import { User, AvailabilityDay, ShiftRequest } from '@/types';
 import { getCategoryColor } from '@/utils/mockData';
+import { User, AvailabilityDay, ShiftRequest } from '@/types';
 
 export default function AvailabilityScreen() {
   const colorScheme = useColorScheme();
@@ -25,8 +25,8 @@ export default function AvailabilityScreen() {
 
   const [user, setUser] = useState<User | null>(null);
   const [selectedDates, setSelectedDates] = useState<{ [key: string]: any }>({});
-  const [markedDates, setMarkedDates] = useState<{ [key: string]: any }>({});
-  const [shiftRequests, setShiftRequests] = useState<ShiftRequest[]>([]);
+  const [availability, setAvailability] = useState<AvailabilityDay[]>([]);
+  const [requests, setRequests] = useState<ShiftRequest[]>([]);
 
   useEffect(() => {
     loadData();
@@ -35,256 +35,243 @@ export default function AvailabilityScreen() {
   const loadData = async () => {
     const userData = await getUser();
     setUser(userData);
-    
-    if (userData) {
-      const availabilities = await getAvailability();
-      const requests = await getShiftRequests();
-      
-      // Filter for current user
-      const userAvailabilities = availabilities.filter(a => a.userId === userData.id);
-      const userRequests = requests.filter(r => r.userId === userData.id);
-      
-      setShiftRequests(userRequests);
-      
-      // Mark available dates
-      const marked: { [key: string]: any } = {};
-      userAvailabilities.forEach(av => {
-        if (av.available) {
-          marked[av.date] = {
-            selected: true,
-            selectedColor: getCategoryColor(userData.category || 'breakfast'),
-          };
-        }
-      });
-      
-      // Mark requested dates
-      userRequests.forEach(req => {
-        if (req.status === 'pending') {
-          marked[req.date] = {
-            ...marked[req.date],
-            marked: true,
-            dotColor: theme.warning,
-          };
-        } else if (req.status === 'approved') {
-          marked[req.date] = {
-            ...marked[req.date],
-            marked: true,
-            dotColor: theme.success,
-          };
-        } else if (req.status === 'rejected') {
-          marked[req.date] = {
-            ...marked[req.date],
-            marked: true,
-            dotColor: theme.error,
-          };
-        }
-      });
-      
-      setMarkedDates(marked);
-    }
+
+    const availabilityData = await getAvailability();
+    setAvailability(availabilityData);
+
+    const requestsData = await getShiftRequests();
+    const userRequests = requestsData.filter(r => r.employeeId === userData?.id);
+    setRequests(userRequests);
+
+    const marked: { [key: string]: any } = {};
+    userRequests.forEach(request => {
+      marked[request.date] = {
+        marked: true,
+        dotColor: getStatusColor(request.status),
+        selected: false,
+      };
+    });
+
+    setSelectedDates(marked);
+    console.log('Loaded availability and requests');
   };
 
   const handleDayPress = (day: DateData) => {
     const dateStr = day.dateString;
-    const isSelected = selectedDates[dateStr];
-    
-    setSelectedDates(prev => ({
-      ...prev,
-      [dateStr]: !isSelected,
-    }));
-  };
+    const newSelected = { ...selectedDates };
 
-  const handleSaveAvailability = async () => {
-    if (!user) return;
-    
-    const selectedCount = Object.keys(selectedDates).filter(key => selectedDates[key]).length;
-    
-    if (selectedCount === 0) {
-      Alert.alert('No Dates Selected', 'Please select at least one date to mark as available.');
-      return;
+    if (newSelected[dateStr]?.selected) {
+      delete newSelected[dateStr];
+    } else {
+      newSelected[dateStr] = {
+        selected: true,
+        selectedColor: theme.pastelBlue,
+        marked: newSelected[dateStr]?.marked,
+        dotColor: newSelected[dateStr]?.dotColor,
+      };
     }
 
-    // Save availability for each selected date
-    for (const dateStr in selectedDates) {
-      if (selectedDates[dateStr]) {
-        const availability: AvailabilityDay = {
-          userId: user.id,
-          date: dateStr,
-          available: true,
-        };
-        await saveAvailability(availability);
-      }
-    }
-
-    Alert.alert('Success', `Marked ${selectedCount} day(s) as available!`);
-    setSelectedDates({});
-    loadData();
+    setSelectedDates(newSelected);
   };
 
   const handleRequestShift = async () => {
-    if (!user || !user.category) return;
-    
-    const selectedCount = Object.keys(selectedDates).filter(key => selectedDates[key]).length;
-    
-    if (selectedCount === 0) {
+    if (!user) {
+      console.log('No user found');
+      return;
+    }
+
+    const selectedDatesList = Object.keys(selectedDates).filter(
+      date => selectedDates[date].selected
+    );
+
+    if (selectedDatesList.length === 0) {
       Alert.alert('No Dates Selected', 'Please select at least one date to request a shift.');
       return;
     }
 
-    // Create shift requests for each selected date
-    for (const dateStr in selectedDates) {
-      if (selectedDates[dateStr]) {
-        const request: ShiftRequest = {
-          id: `req-${Date.now()}-${dateStr}`,
-          userId: user.id,
-          userName: `${user.firstName} ${user.lastName}`,
-          category: user.category,
-          date: dateStr,
-          startTime: '08:00',
-          endTime: '16:00',
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-        };
-        await saveShiftRequest(request);
-      }
-    }
+    const newRequests: ShiftRequest[] = selectedDatesList.map(date => ({
+      id: `request-${Date.now()}-${Math.random()}`,
+      employeeId: user.id,
+      date,
+      status: 'pending',
+      category: user.category!,
+      createdAt: new Date().toISOString(),
+    }));
 
-    Alert.alert('Success', `Requested ${selectedCount} shift(s)! Your admin will review them.`);
-    setSelectedDates({});
-    loadData();
-  };
+    const allRequests = await getShiftRequests();
+    await saveShiftRequest([...allRequests, ...newRequests]);
 
-  const getRequestForDate = (dateStr: string): ShiftRequest | undefined => {
-    return shiftRequests.find(req => req.date === dateStr);
+    Alert.alert(
+      'Success',
+      `Shift request${selectedDatesList.length > 1 ? 's' : ''} submitted for ${selectedDatesList.length} day${selectedDatesList.length > 1 ? 's' : ''}`
+    );
+
+    await loadData();
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending':
-        return theme.warning;
       case 'approved':
         return theme.success;
       case 'rejected':
         return theme.error;
       default:
-        return theme.textSecondary;
+        return theme.warning;
     }
   };
 
+  const getRequestForDate = (dateStr: string): ShiftRequest | undefined => {
+    return requests.find(r => r.date === dateStr);
+  };
+
+  const pendingRequests = requests.filter(r => r.status === 'pending');
+  const approvedRequests = requests.filter(r => r.status === 'approved');
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.text }]}>My Availability</Text>
-          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-            Select days you want to work this month
+          <Text style={[styles.title, { color: theme.text }]}>
+            Book Your Shifts
           </Text>
-        </View>
-
-        {/* Legend */}
-        <View style={[styles.legend, { backgroundColor: theme.card }]}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: getCategoryColor(user?.category || 'breakfast') }]} />
-            <Text style={[styles.legendText, { color: theme.text }]}>Available</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: theme.warning }]} />
-            <Text style={[styles.legendText, { color: theme.text }]}>Pending</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: theme.success }]} />
-            <Text style={[styles.legendText, { color: theme.text }]}>Approved</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: theme.error }]} />
-            <Text style={[styles.legendText, { color: theme.text }]}>Rejected</Text>
-          </View>
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+            Select dates you&apos;d like to work
+          </Text>
         </View>
 
         {/* Calendar */}
         <View style={[styles.calendarContainer, { backgroundColor: theme.card }]}>
           <Calendar
-            markedDates={{
-              ...markedDates,
-              ...Object.keys(selectedDates).reduce((acc, date) => {
-                if (selectedDates[date]) {
-                  acc[date] = {
-                    ...markedDates[date],
-                    selected: true,
-                    selectedColor: theme.primary,
-                  };
-                }
-                return acc;
-              }, {} as { [key: string]: any }),
-            }}
+            markedDates={selectedDates}
             onDayPress={handleDayPress}
             theme={{
               backgroundColor: theme.card,
               calendarBackground: theme.card,
-              textSectionTitleColor: theme.text,
-              selectedDayBackgroundColor: theme.primary,
-              selectedDayTextColor: theme.card,
+              textSectionTitleColor: theme.textSecondary,
+              selectedDayBackgroundColor: theme.pastelBlue,
+              selectedDayTextColor: theme.text,
               todayTextColor: theme.primary,
               dayTextColor: theme.text,
-              textDisabledColor: theme.textSecondary,
-              monthTextColor: theme.text,
+              textDisabledColor: theme.textTertiary,
+              dotColor: theme.primary,
+              selectedDotColor: theme.text,
               arrowColor: theme.primary,
+              monthTextColor: theme.text,
+              textDayFontWeight: '500',
+              textMonthFontWeight: '700',
+              textDayHeaderFontWeight: '600',
+              textDayFontSize: 16,
+              textMonthFontSize: 18,
+              textDayHeaderFontSize: 13,
             }}
-            minDate={new Date().toISOString().split('T')[0]}
+            style={styles.calendar}
           />
         </View>
 
-        {/* Action Buttons */}
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: theme.success }]}
-            onPress={handleSaveAvailability}
-          >
-            <IconSymbol name="checkmark.circle" size={20} color={theme.card} />
-            <Text style={[styles.actionButtonText, { color: theme.card }]}>
-              Mark as Available
-            </Text>
-          </TouchableOpacity>
+        {/* Request Button */}
+        <TouchableOpacity
+          style={[buttonStyles.primary, styles.requestButton]}
+          onPress={handleRequestShift}
+          activeOpacity={0.8}
+        >
+          <IconSymbol name="calendar.badge.plus" size={20} color="#FFFFFF" />
+          <Text style={[buttonStyles.textWhite, { marginLeft: 8 }]}>
+            Request Selected Shifts
+          </Text>
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: theme.primary }]}
-            onPress={handleRequestShift}
-          >
-            <IconSymbol name="calendar.badge.plus" size={20} color={theme.card} />
-            <Text style={[styles.actionButtonText, { color: theme.card }]}>
-              Request Shifts
+        {/* Stats */}
+        <View style={styles.statsRow}>
+          <View style={[styles.statBox, { backgroundColor: theme.pastelYellow }]}>
+            <Text style={[styles.statNumber, { color: theme.text }]}>
+              {pendingRequests.length}
             </Text>
-          </TouchableOpacity>
+            <Text style={[styles.statLabel, { color: theme.text }]}>Pending</Text>
+          </View>
+
+          <View style={[styles.statBox, { backgroundColor: theme.pastelMint }]}>
+            <Text style={[styles.statNumber, { color: theme.text }]}>
+              {approvedRequests.length}
+            </Text>
+            <Text style={[styles.statLabel, { color: theme.text }]}>Approved</Text>
+          </View>
         </View>
 
-        {/* Shift Requests List */}
-        {shiftRequests.length > 0 && (
-          <View style={styles.requestsSection}>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>My Shift Requests</Text>
-            {shiftRequests.map(request => (
-              <View key={request.id} style={[styles.requestCard, { backgroundColor: theme.card }]}>
+        {/* Recent Requests */}
+        {requests.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
+              Your Requests
+            </Text>
+            {requests.slice(0, 10).map(request => (
+              <View
+                key={request.id}
+                style={[styles.requestCard, { backgroundColor: theme.card }]}
+              >
                 <View style={styles.requestHeader}>
-                  <Text style={[styles.requestDate, { color: theme.text }]}>
-                    {new Date(request.date).toLocaleDateString('en-US', {
-                      weekday: 'short',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(request.status) }]}>
-                    <Text style={[styles.statusText, { color: theme.card }]}>
-                      {request.status.toUpperCase()}
+                  <View style={[
+                    styles.requestIcon,
+                    { 
+                      backgroundColor: request.status === 'approved' 
+                        ? theme.pastelMint 
+                        : request.status === 'rejected'
+                        ? theme.error + '20'
+                        : theme.pastelYellow
+                    }
+                  ]}>
+                    <IconSymbol 
+                      name={
+                        request.status === 'approved' 
+                          ? 'checkmark.circle' 
+                          : request.status === 'rejected'
+                          ? 'xmark.circle'
+                          : 'clock'
+                      } 
+                      size={20} 
+                      color={
+                        request.status === 'approved'
+                          ? theme.text
+                          : request.status === 'rejected'
+                          ? theme.error
+                          : theme.text
+                      } 
+                    />
+                  </View>
+                  <View style={styles.requestInfo}>
+                    <Text style={[styles.requestDate, { color: theme.text }]}>
+                      {new Date(request.date).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        month: 'long',
+                        day: 'numeric',
+                      })}
+                    </Text>
+                    <Text style={[styles.requestStatus, { color: theme.textSecondary }]}>
+                      {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
                     </Text>
                   </View>
                 </View>
-                <Text style={[styles.requestTime, { color: theme.textSecondary }]}>
-                  {request.startTime} - {request.endTime}
-                </Text>
               </View>
             ))}
           </View>
         )}
+
+        {/* Empty State */}
+        {requests.length === 0 && (
+          <View style={[styles.emptyState, { backgroundColor: theme.card }]}>
+            <IconSymbol name="calendar" size={64} color={theme.textTertiary} />
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>No Requests Yet</Text>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+              Select dates on the calendar to request shifts
+            </Text>
+          </View>
+        )}
+
+        {/* Bottom Spacing */}
+        <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -295,100 +282,114 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 100,
+    padding: 24,
   },
   header: {
-    marginBottom: 20,
+    marginBottom: 24,
+    alignItems: 'center',
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
-  },
-  legend: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-    gap: 16,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  legendText: {
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: '500',
   },
   calendarContainer: {
-    borderRadius: 12,
+    borderRadius: 20,
     padding: 16,
-    marginBottom: 20,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+    marginBottom: 24,
+    boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.06)',
     elevation: 2,
   },
-  actions: {
-    gap: 12,
-    marginBottom: 24,
+  calendar: {
+    borderRadius: 16,
   },
-  actionButton: {
+  requestButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    borderRadius: 8,
-    gap: 12,
+    marginBottom: 24,
   },
-  actionButtonText: {
-    fontSize: 16,
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 32,
+  },
+  statBox: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.08)',
+    elevation: 2,
+  },
+  statNumber: {
+    fontSize: 32,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 15,
     fontWeight: '600',
   },
-  requestsSection: {
-    marginTop: 8,
+  section: {
+    marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    marginBottom: 12,
+    marginBottom: 16,
+    letterSpacing: -0.3,
   },
   requestCard: {
+    borderRadius: 16,
     padding: 16,
-    borderRadius: 12,
     marginBottom: 12,
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+    boxShadow: '0px 2px 12px rgba(0, 0, 0, 0.04)',
     elevation: 1,
   },
   requestHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+  },
+  requestIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  requestInfo: {
+    flex: 1,
   },
   requestDate: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
+    marginBottom: 2,
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+  requestStatus: {
+    fontSize: 15,
   },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '700',
+  emptyState: {
+    borderRadius: 20,
+    padding: 48,
+    alignItems: 'center',
+    boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.06)',
+    elevation: 2,
   },
-  requestTime: {
-    fontSize: 14,
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 15,
+    textAlign: 'center',
   },
 });
