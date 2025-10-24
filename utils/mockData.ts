@@ -70,9 +70,9 @@ const userPasswords: Record<string, string> = {
 
 // Mock departments
 export const mockDepartments: Department[] = [
-  { id: '1', name: 'Breakfast', color: '#F57C00', managerIds: ['2'] },
-  { id: '2', name: 'Housekeeping', color: '#388E3C', managerIds: ['3'] },
-  { id: '3', name: 'Front Desk', color: '#1976D2', managerIds: ['4'] },
+  { id: '1', name: 'Breakfast', color: '#7BA05B', managerIds: ['2'] },
+  { id: '2', name: 'Housekeeping', color: '#6B9AC4', managerIds: ['3'] },
+  { id: '3', name: 'Front Desk', color: '#FF6B5A', managerIds: ['4'] },
 ];
 
 // Generate mock shifts for the next 7 days
@@ -81,9 +81,9 @@ export const generateMockShifts = (userId?: string, category?: EmployeeCategory)
   const today = new Date();
   
   const categoryData: Record<EmployeeCategory, { department: string; position: string; color: string }> = {
-    breakfast: { department: 'Breakfast', position: 'Breakfast Server', color: '#F57C00' },
-    housekeeping: { department: 'Housekeeping', position: 'Housekeeper', color: '#388E3C' },
-    frontdesk: { department: 'Front Desk', position: 'Receptionist', color: '#1976D2' },
+    breakfast: { department: 'Breakfast', position: 'Breakfast Server', color: '#7BA05B' },
+    housekeeping: { department: 'Housekeeping', position: 'Housekeeper', color: '#6B9AC4' },
+    frontdesk: { department: 'Front Desk', position: 'Receptionist', color: '#FF6B5A' },
   };
 
   const userCategory = category || 'breakfast';
@@ -150,7 +150,7 @@ export const validateLogin = (email: string, password: string): User | null => {
   // Check password
   const expectedPassword = userPasswords[user.email];
   if (trimmedPassword === expectedPassword) {
-    console.log('Login successful for user:', user.firstName, user.lastName);
+    console.log('Login successful for user:', user.firstName, user.lastName, 'Category:', user.category);
     return user;
   }
   
@@ -166,7 +166,7 @@ export const registerUser = (
   lastName: string,
   category: EmployeeCategory
 ): User => {
-  console.log('Registering new user:', email);
+  console.log('Registering new user:', email, 'Category:', category);
   
   const categoryDepartments: Record<EmployeeCategory, string> = {
     breakfast: 'Breakfast',
@@ -185,15 +185,15 @@ export const registerUser = (
     createdAt: new Date().toISOString(),
   };
   
-  console.log('User registered successfully:', newUser.firstName, newUser.lastName);
+  console.log('User registered successfully:', newUser.firstName, newUser.lastName, 'Category:', newUser.category);
   return newUser;
 };
 
 export const getCategoryColor = (category: EmployeeCategory): string => {
   const colors: Record<EmployeeCategory, string> = {
-    breakfast: '#F57C00',
-    housekeeping: '#388E3C',
-    frontdesk: '#1976D2',
+    breakfast: '#7BA05B',
+    housekeeping: '#6B9AC4',
+    frontdesk: '#FF6B5A',
   };
   return colors[category];
 };

@@ -84,6 +84,25 @@ export default function LoginScreen() {
     }
   };
 
+  const quickLogin = async (demoEmail: string, demoPassword: string) => {
+    setEmail(demoEmail);
+    setPassword(demoPassword);
+    setLoading(true);
+    try {
+      const user = await validateLogin(demoEmail, demoPassword);
+      if (user) {
+        await saveUser(user);
+        await setAuthenticated(true);
+        router.replace('/(tabs)/(home)');
+      }
+    } catch (error) {
+      console.log('Quick login error:', error);
+      Alert.alert('Error', 'An error occurred during login');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: currentColors.background }]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
@@ -200,13 +219,69 @@ export default function LoginScreen() {
           {/* Demo Credentials */}
           <View style={[styles.demoCard, { backgroundColor: currentColors.card }]}>
             <Text style={[styles.demoTitle, { color: currentColors.text }]}>
-              Demo Credentials
+              Demo Accounts - Try Different Layouts!
             </Text>
-            <Text style={[styles.demoText, { color: currentColors.textSecondary }]}>
-              Admin: admin@hotel.com / admin123
+            <Text style={[styles.demoSubtitle, { color: currentColors.textSecondary }]}>
+              Each category has a unique design
             </Text>
+            
+            <TouchableOpacity 
+              style={[styles.quickLoginButton, { backgroundColor: '#7BA05B20', borderColor: '#7BA05B' }]}
+              onPress={() => quickLogin('breakfast-admin@hotel.com', 'admin123')}
+            >
+              <View style={styles.quickLoginContent}>
+                <IconSymbol name="cup.and.saucer.fill" size={20} color="#7BA05B" />
+                <View style={styles.quickLoginText}>
+                  <Text style={[styles.quickLoginTitle, { color: currentColors.text }]}>
+                    Breakfast (Plant Shop Style)
+                  </Text>
+                  <Text style={[styles.quickLoginEmail, { color: currentColors.textSecondary }]}>
+                    breakfast-admin@hotel.com
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.quickLoginButton, { backgroundColor: '#FF6B5A20', borderColor: '#FF6B5A' }]}
+              onPress={() => quickLogin('frontdesk-admin@hotel.com', 'admin123')}
+            >
+              <View style={styles.quickLoginContent}>
+                <IconSymbol name="person.2.fill" size={20} color="#FF6B5A" />
+                <View style={styles.quickLoginText}>
+                  <Text style={[styles.quickLoginTitle, { color: currentColors.text }]}>
+                    Front Desk (Transport Card Style)
+                  </Text>
+                  <Text style={[styles.quickLoginEmail, { color: currentColors.textSecondary }]}>
+                    frontdesk-admin@hotel.com
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.quickLoginButton, { backgroundColor: '#6B9AC420', borderColor: '#6B9AC4' }]}
+              onPress={() => quickLogin('housekeeping-admin@hotel.com', 'admin123')}
+            >
+              <View style={styles.quickLoginContent}>
+                <IconSymbol name="bed.double.fill" size={20} color="#6B9AC4" />
+                <View style={styles.quickLoginText}>
+                  <Text style={[styles.quickLoginTitle, { color: currentColors.text }]}>
+                    Housekeeping (Air Quality Style)
+                  </Text>
+                  <Text style={[styles.quickLoginEmail, { color: currentColors.textSecondary }]}>
+                    housekeeping-admin@hotel.com
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            <View style={[styles.divider, { marginVertical: 16 }]}>
+              <View style={[styles.dividerLine, { backgroundColor: currentColors.border }]} />
+            </View>
+
             <Text style={[styles.demoText, { color: currentColors.textSecondary }]}>
-              Employee: employee@hotel.com / emp123
+              Password for all: admin123
             </Text>
           </View>
         </ScrollView>
@@ -338,14 +413,43 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   demoTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+    letterSpacing: 0.3,
+  },
+  demoSubtitle: {
+    fontSize: 13,
+    marginBottom: 16,
+    letterSpacing: 0.1,
+  },
+  quickLoginButton: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+  },
+  quickLoginContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  quickLoginText: {
+    flex: 1,
+    gap: 2,
+  },
+  quickLoginTitle: {
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 12,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+  },
+  quickLoginEmail: {
+    fontSize: 12,
+    letterSpacing: 0.1,
   },
   demoText: {
     fontSize: 13,
-    marginBottom: 6,
+    textAlign: 'center',
     letterSpacing: 0.1,
   },
 });
