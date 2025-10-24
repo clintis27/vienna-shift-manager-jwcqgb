@@ -6,7 +6,7 @@ import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useColorScheme, Alert, ActivityIndicator, View } from 'react-native';
+import { useColorScheme, Alert, ActivityIndicator, View, Text, StyleSheet } from 'react-native';
 import { useNetworkState } from 'expo-network';
 import {
   DarkTheme,
@@ -31,7 +31,7 @@ export default function RootLayout() {
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
   const [isReady, setIsReady] = useState(false);
-  const [initialRoute, setInitialRoute] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -40,44 +40,37 @@ export default function RootLayout() {
       }
 
       try {
-        console.log('Initializing app...');
+        console.log('=== App Initialization Started ===');
         
         // Check authentication status
         const isAuth = await isAuthenticated();
-        console.log('Is authenticated:', isAuth);
+        console.log('Authentication status:', isAuth);
         
-        // Set initial route
-        const route = isAuth ? '/(tabs)/(home)' : '/(auth)/login';
-        setInitialRoute(route);
+        setAuthChecked(true);
         
         // Hide splash screen
         await SplashScreen.hideAsync();
+        console.log('Splash screen hidden');
         
         // Set ready state
         setIsReady(true);
         
-        console.log('App initialization complete');
+        console.log('=== App Initialization Complete ===');
       } catch (error) {
         console.error('Error initializing app:', error);
-        // Fallback to login on error
-        setInitialRoute('/(auth)/login');
+        // Ensure we still hide splash and set ready even on error
+        setAuthChecked(true);
         setIsReady(true);
-        await SplashScreen.hideAsync();
+        try {
+          await SplashScreen.hideAsync();
+        } catch (e) {
+          console.error('Error hiding splash screen:', e);
+        }
       }
     };
 
     initializeApp();
   }, [loaded]);
-
-  // Navigate to initial route once ready
-  useEffect(() => {
-    if (isReady && initialRoute) {
-      console.log('Navigating to initial route:', initialRoute);
-      setTimeout(() => {
-        router.replace(initialRoute as any);
-      }, 100);
-    }
-  }, [isReady, initialRoute]);
 
   React.useEffect(() => {
     if (
@@ -91,8 +84,13 @@ export default function RootLayout() {
     }
   }, [networkState.isConnected, networkState.isInternetReachable]);
 
-  if (!loaded || !isReady) {
-    return null;
+  if (!loaded || !isReady || !authChecked) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#B8C5B8" />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
   }
 
   const CustomDefaultTheme: Theme = {
@@ -129,6 +127,7 @@ export default function RootLayout() {
         <WidgetProvider>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
               <Stack.Screen name="(auth)" />
               <Stack.Screen name="(tabs)" />
             </Stack>
@@ -139,3 +138,17 @@ export default function RootLayout() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFA',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#2D2D2D',
+  },
+});

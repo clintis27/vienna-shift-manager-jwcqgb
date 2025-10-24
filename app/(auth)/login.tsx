@@ -35,17 +35,36 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
+      console.log('=== Login Started ===');
+      console.log('Email:', email);
+      
       const user = await validateLogin(email, password);
+      
       if (user) {
+        console.log('User validated:', user.email, 'Category:', user.category);
+        
+        // Save user data
         await saveUser(user);
+        console.log('User data saved');
+        
+        // Set authentication status
         await setAuthenticated(true);
+        console.log('Authentication status set to true');
+        
+        // Small delay to ensure state is saved
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Navigate to home
+        console.log('Navigating to home...');
         router.replace('/(tabs)/(home)');
+        console.log('=== Login Complete ===');
       } else {
+        console.log('Login failed: Invalid credentials');
         Alert.alert('Error', 'Invalid email or password');
       }
     } catch (error) {
-      console.log('Login error:', error);
-      Alert.alert('Error', 'An error occurred during login');
+      console.error('Login error:', error);
+      Alert.alert('Error', 'An error occurred during login. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -71,15 +90,11 @@ export default function LoginScreen() {
       });
 
       if (result.success) {
-        const user = await validateLogin('admin@hotel.com', 'admin123');
-        if (user) {
-          await saveUser(user);
-          await setAuthenticated(true);
-          router.replace('/(tabs)/(home)');
-        }
+        // Use default admin credentials for biometric login
+        await quickLogin('admin@hotel.com', 'admin123');
       }
     } catch (error) {
-      console.log('Biometric login error:', error);
+      console.error('Biometric login error:', error);
       Alert.alert('Error', 'Biometric authentication failed');
     }
   };
@@ -89,15 +104,32 @@ export default function LoginScreen() {
     setPassword(demoPassword);
     setLoading(true);
     try {
+      console.log('=== Quick Login Started ===');
+      console.log('Email:', demoEmail);
+      
       const user = await validateLogin(demoEmail, demoPassword);
+      
       if (user) {
+        console.log('User validated:', user.email, 'Category:', user.category);
+        
         await saveUser(user);
+        console.log('User data saved');
+        
         await setAuthenticated(true);
+        console.log('Authentication status set to true');
+        
+        // Small delay to ensure state is saved
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        console.log('Navigating to home...');
         router.replace('/(tabs)/(home)');
+        console.log('=== Quick Login Complete ===');
+      } else {
+        Alert.alert('Error', 'Login failed');
       }
     } catch (error) {
-      console.log('Quick login error:', error);
-      Alert.alert('Error', 'An error occurred during login');
+      console.error('Quick login error:', error);
+      Alert.alert('Error', 'An error occurred during login. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -147,6 +179,7 @@ export default function LoginScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                editable={!loading}
               />
             </View>
 
@@ -168,11 +201,16 @@ export default function LoginScreen() {
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
+                editable={!loading}
               />
             </View>
 
             <TouchableOpacity
-              style={[styles.loginButton, { backgroundColor: currentColors.sage }]}
+              style={[
+                styles.loginButton, 
+                { backgroundColor: currentColors.sage },
+                loading && styles.buttonDisabled
+              ]}
               onPress={handleLogin}
               disabled={loading}
             >
@@ -196,6 +234,7 @@ export default function LoginScreen() {
                 }
               ]}
               onPress={handleBiometricLogin}
+              disabled={loading}
             >
               <IconSymbol name="faceid" size={24} color={currentColors.text} />
               <Text style={[styles.biometricButtonText, { color: currentColors.text }]}>
@@ -228,6 +267,7 @@ export default function LoginScreen() {
             <TouchableOpacity 
               style={[styles.quickLoginButton, { backgroundColor: '#7BA05B20', borderColor: '#7BA05B' }]}
               onPress={() => quickLogin('breakfast-admin@hotel.com', 'admin123')}
+              disabled={loading}
             >
               <View style={styles.quickLoginContent}>
                 <IconSymbol name="cup.and.saucer.fill" size={20} color="#7BA05B" />
@@ -245,6 +285,7 @@ export default function LoginScreen() {
             <TouchableOpacity 
               style={[styles.quickLoginButton, { backgroundColor: '#FF6B5A20', borderColor: '#FF6B5A' }]}
               onPress={() => quickLogin('frontdesk-admin@hotel.com', 'admin123')}
+              disabled={loading}
             >
               <View style={styles.quickLoginContent}>
                 <IconSymbol name="person.2.fill" size={20} color="#FF6B5A" />
@@ -262,6 +303,7 @@ export default function LoginScreen() {
             <TouchableOpacity 
               style={[styles.quickLoginButton, { backgroundColor: '#6B9AC420', borderColor: '#6B9AC4' }]}
               onPress={() => quickLogin('housekeeping-admin@hotel.com', 'admin123')}
+              disabled={loading}
             >
               <View style={styles.quickLoginContent}>
                 <IconSymbol name="bed.double.fill" size={20} color="#6B9AC4" />
@@ -355,6 +397,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     boxShadow: '0px 6px 20px rgba(184, 197, 184, 0.3)',
     elevation: 3,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   loginButtonText: {
     fontSize: 17,

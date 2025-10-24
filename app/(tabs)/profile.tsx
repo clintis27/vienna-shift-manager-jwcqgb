@@ -47,7 +47,9 @@ export default function ProfileScreen() {
   const loadUser = async () => {
     try {
       setLoading(true);
+      console.log('Profile: Loading user data...');
       const currentUser = await getUser();
+      console.log('Profile: User loaded:', currentUser?.email);
       setUser(currentUser);
 
       if (currentUser) {
@@ -59,8 +61,9 @@ export default function ProfileScreen() {
           .single();
 
         if (empError) {
-          console.error('Error loading employee:', empError);
+          console.log('Profile: No employee data in Supabase (using mock data)');
         } else if (empData) {
+          console.log('Profile: Employee data loaded from Supabase');
           const mappedEmployee: Employee = {
             id: empData.id,
             userId: empData.user_id || undefined,
@@ -82,7 +85,7 @@ export default function ProfileScreen() {
         }
       }
     } catch (error) {
-      console.error('Error loading user:', error);
+      console.error('Profile: Error loading user:', error);
     } finally {
       setLoading(false);
     }
@@ -97,7 +100,7 @@ export default function ProfileScreen() {
         .order('uploaded_at', { ascending: false });
 
       if (error) {
-        console.error('Error loading certificates:', error);
+        console.error('Profile: Error loading certificates:', error);
         return;
       }
 
@@ -120,7 +123,7 @@ export default function ProfileScreen() {
         setCertificates(mappedCerts);
       }
     } catch (error) {
-      console.error('Error loading certificates:', error);
+      console.error('Profile: Error loading certificates:', error);
     }
   };
 
@@ -157,7 +160,7 @@ export default function ProfileScreen() {
         setSelectedFile(result.assets[0]);
       }
     } catch (error) {
-      console.error('Error picking document:', error);
+      console.error('Profile: Error picking document:', error);
       Alert.alert('Error', 'Failed to pick document');
     }
   };
@@ -185,7 +188,7 @@ export default function ProfileScreen() {
         });
 
       if (uploadError) {
-        console.error('Error uploading file:', uploadError);
+        console.error('Profile: Error uploading file:', uploadError);
         Alert.alert('Error', 'Failed to upload file');
         return;
       }
@@ -208,7 +211,7 @@ export default function ProfileScreen() {
         .single();
 
       if (certError) {
-        console.error('Error creating certificate record:', certError);
+        console.error('Profile: Error creating certificate record:', certError);
         Alert.alert('Error', 'Failed to save certificate information');
         return;
       }
@@ -218,7 +221,7 @@ export default function ProfileScreen() {
       resetUploadForm();
       await loadCertificates(employee.id);
     } catch (error) {
-      console.error('Error uploading certificate:', error);
+      console.error('Profile: Error uploading certificate:', error);
       Alert.alert('Error', 'Failed to upload certificate');
     } finally {
       setUploading(false);
@@ -243,13 +246,34 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('=== Logout Started ===');
+              
+              // Clear user data
               await removeUser();
+              console.log('User data removed');
+              
+              // Set authentication to false
               await setAuthenticated(false);
-              await supabase.auth.signOut();
+              console.log('Authentication status set to false');
+              
+              // Sign out from Supabase (if using Supabase auth)
+              try {
+                await supabase.auth.signOut();
+                console.log('Supabase session cleared');
+              } catch (supabaseError) {
+                console.log('Supabase signout skipped (using mock auth)');
+              }
+              
+              // Small delay to ensure state is saved
+              await new Promise(resolve => setTimeout(resolve, 100));
+              
+              // Navigate to login
+              console.log('Navigating to login...');
               router.replace('/(auth)/login');
+              console.log('=== Logout Complete ===');
             } catch (error) {
-              console.error('Error during logout:', error);
-              Alert.alert('Error', 'Failed to logout');
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
             }
           },
         },
@@ -269,7 +293,8 @@ export default function ProfileScreen() {
           onPress: async () => {
             try {
               await clearAllData();
-              Alert.alert('Success', 'All data cleared');
+              Alert.alert('Success', 'All data cleared. Please login again.');
+              router.replace('/(auth)/login');
             } catch (error) {
               console.error('Error clearing data:', error);
               Alert.alert('Error', 'Failed to clear data');
@@ -336,6 +361,12 @@ export default function ProfileScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: currentColors.background }]}>
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: currentColors.text }]}>No user data found</Text>
+          <TouchableOpacity
+            style={[styles.retryButton, { backgroundColor: currentColors.primary }]}
+            onPress={() => router.replace('/(auth)/login')}
+          >
+            <Text style={styles.retryButtonText}>Go to Login</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -622,9 +653,21 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 24,
   },
   errorText: {
     fontSize: 18,
+    marginBottom: 24,
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   header: {
     alignItems: 'center',

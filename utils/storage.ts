@@ -18,19 +18,27 @@ const KEYS = {
 // User storage
 export const saveUser = async (user: User): Promise<void> => {
   try {
-    await AsyncStorage.setItem(KEYS.USER, JSON.stringify(user));
-    console.log('User saved successfully');
+    const userJson = JSON.stringify(user);
+    await AsyncStorage.setItem(KEYS.USER, userJson);
+    console.log('Storage: User saved successfully');
   } catch (error) {
-    console.error('Error saving user:', error);
+    console.error('Storage: Error saving user:', error);
+    throw error;
   }
 };
 
 export const getUser = async (): Promise<User | null> => {
   try {
     const userJson = await AsyncStorage.getItem(KEYS.USER);
-    return userJson ? JSON.parse(userJson) : null;
+    if (userJson) {
+      const user = JSON.parse(userJson);
+      console.log('Storage: User retrieved:', user.email);
+      return user;
+    }
+    console.log('Storage: No user found');
+    return null;
   } catch (error) {
-    console.error('Error getting user:', error);
+    console.error('Storage: Error getting user:', error);
     return null;
   }
 };
@@ -38,9 +46,10 @@ export const getUser = async (): Promise<User | null> => {
 export const removeUser = async (): Promise<void> => {
   try {
     await AsyncStorage.removeItem(KEYS.USER);
-    console.log('User removed successfully');
+    console.log('Storage: User removed successfully');
   } catch (error) {
-    console.error('Error removing user:', error);
+    console.error('Storage: Error removing user:', error);
+    throw error;
   }
 };
 
@@ -48,17 +57,21 @@ export const removeUser = async (): Promise<void> => {
 export const setAuthenticated = async (isAuth: boolean): Promise<void> => {
   try {
     await AsyncStorage.setItem(KEYS.IS_AUTHENTICATED, JSON.stringify(isAuth));
+    console.log('Storage: Authentication status set to:', isAuth);
   } catch (error) {
-    console.error('Error setting authentication status:', error);
+    console.error('Storage: Error setting authentication status:', error);
+    throw error;
   }
 };
 
 export const isAuthenticated = async (): Promise<boolean> => {
   try {
     const authStatus = await AsyncStorage.getItem(KEYS.IS_AUTHENTICATED);
-    return authStatus ? JSON.parse(authStatus) : false;
+    const isAuth = authStatus ? JSON.parse(authStatus) : false;
+    console.log('Storage: Authentication status:', isAuth);
+    return isAuth;
   } catch (error) {
-    console.error('Error checking authentication status:', error);
+    console.error('Storage: Error checking authentication status:', error);
     return false;
   }
 };
@@ -67,9 +80,10 @@ export const isAuthenticated = async (): Promise<boolean> => {
 export const saveShifts = async (shifts: Shift[]): Promise<void> => {
   try {
     await AsyncStorage.setItem(KEYS.SHIFTS, JSON.stringify(shifts));
-    console.log('Shifts saved successfully');
+    console.log('Storage: Shifts saved successfully');
   } catch (error) {
-    console.error('Error saving shifts:', error);
+    console.error('Storage: Error saving shifts:', error);
+    throw error;
   }
 };
 
@@ -78,7 +92,7 @@ export const getShifts = async (): Promise<Shift[]> => {
     const shiftsJson = await AsyncStorage.getItem(KEYS.SHIFTS);
     return shiftsJson ? JSON.parse(shiftsJson) : [];
   } catch (error) {
-    console.error('Error getting shifts:', error);
+    console.error('Storage: Error getting shifts:', error);
     return [];
   }
 };
@@ -89,9 +103,10 @@ export const saveTimeEntry = async (entry: TimeEntry): Promise<void> => {
     const entries = await getTimeEntries();
     const updatedEntries = [...entries, entry];
     await AsyncStorage.setItem(KEYS.TIME_ENTRIES, JSON.stringify(updatedEntries));
-    console.log('Time entry saved successfully');
+    console.log('Storage: Time entry saved successfully');
   } catch (error) {
-    console.error('Error saving time entry:', error);
+    console.error('Storage: Error saving time entry:', error);
+    throw error;
   }
 };
 
@@ -102,9 +117,10 @@ export const updateTimeEntry = async (entryId: string, updates: Partial<TimeEntr
       entry.id === entryId ? { ...entry, ...updates } : entry
     );
     await AsyncStorage.setItem(KEYS.TIME_ENTRIES, JSON.stringify(updatedEntries));
-    console.log('Time entry updated successfully');
+    console.log('Storage: Time entry updated successfully');
   } catch (error) {
-    console.error('Error updating time entry:', error);
+    console.error('Storage: Error updating time entry:', error);
+    throw error;
   }
 };
 
@@ -113,7 +129,7 @@ export const getTimeEntries = async (): Promise<TimeEntry[]> => {
     const entriesJson = await AsyncStorage.getItem(KEYS.TIME_ENTRIES);
     return entriesJson ? JSON.parse(entriesJson) : [];
   } catch (error) {
-    console.error('Error getting time entries:', error);
+    console.error('Storage: Error getting time entries:', error);
     return [];
   }
 };
@@ -124,9 +140,10 @@ export const saveLeaveRequest = async (request: LeaveRequest): Promise<void> => 
     const requests = await getLeaveRequests();
     const updatedRequests = [...requests, request];
     await AsyncStorage.setItem(KEYS.LEAVE_REQUESTS, JSON.stringify(updatedRequests));
-    console.log('Leave request saved successfully');
+    console.log('Storage: Leave request saved successfully');
   } catch (error) {
-    console.error('Error saving leave request:', error);
+    console.error('Storage: Error saving leave request:', error);
+    throw error;
   }
 };
 
@@ -135,7 +152,7 @@ export const getLeaveRequests = async (): Promise<LeaveRequest[]> => {
     const requestsJson = await AsyncStorage.getItem(KEYS.LEAVE_REQUESTS);
     return requestsJson ? JSON.parse(requestsJson) : [];
   } catch (error) {
-    console.error('Error getting leave requests:', error);
+    console.error('Storage: Error getting leave requests:', error);
     return [];
   }
 };
@@ -146,9 +163,10 @@ export const saveShiftRequest = async (request: ShiftRequest): Promise<void> => 
     const requests = await getShiftRequests();
     const updatedRequests = [...requests, request];
     await AsyncStorage.setItem(KEYS.SHIFT_REQUESTS, JSON.stringify(updatedRequests));
-    console.log('Shift request saved successfully');
+    console.log('Storage: Shift request saved successfully');
   } catch (error) {
-    console.error('Error saving shift request:', error);
+    console.error('Storage: Error saving shift request:', error);
+    throw error;
   }
 };
 
@@ -157,7 +175,7 @@ export const getShiftRequests = async (): Promise<ShiftRequest[]> => {
     const requestsJson = await AsyncStorage.getItem(KEYS.SHIFT_REQUESTS);
     return requestsJson ? JSON.parse(requestsJson) : [];
   } catch (error) {
-    console.error('Error getting shift requests:', error);
+    console.error('Storage: Error getting shift requests:', error);
     return [];
   }
 };
@@ -169,9 +187,10 @@ export const updateShiftRequest = async (requestId: string, updates: Partial<Shi
       request.id === requestId ? { ...request, ...updates } : request
     );
     await AsyncStorage.setItem(KEYS.SHIFT_REQUESTS, JSON.stringify(updatedRequests));
-    console.log('Shift request updated successfully');
+    console.log('Storage: Shift request updated successfully');
   } catch (error) {
-    console.error('Error updating shift request:', error);
+    console.error('Storage: Error updating shift request:', error);
+    throw error;
   }
 };
 
@@ -192,9 +211,10 @@ export const saveAvailability = async (availability: AvailabilityDay): Promise<v
     }
     
     await AsyncStorage.setItem(KEYS.AVAILABILITY, JSON.stringify(updatedAvailabilities));
-    console.log('Availability saved successfully');
+    console.log('Storage: Availability saved successfully');
   } catch (error) {
-    console.error('Error saving availability:', error);
+    console.error('Storage: Error saving availability:', error);
+    throw error;
   }
 };
 
@@ -203,7 +223,7 @@ export const getAvailability = async (): Promise<AvailabilityDay[]> => {
     const availabilityJson = await AsyncStorage.getItem(KEYS.AVAILABILITY);
     return availabilityJson ? JSON.parse(availabilityJson) : [];
   } catch (error) {
-    console.error('Error getting availability:', error);
+    console.error('Storage: Error getting availability:', error);
     return [];
   }
 };
@@ -214,9 +234,10 @@ export const saveNotification = async (notification: Notification): Promise<void
     const notifications = await getNotifications();
     const updatedNotifications = [notification, ...notifications];
     await AsyncStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(updatedNotifications));
-    console.log('Notification saved successfully');
+    console.log('Storage: Notification saved successfully');
   } catch (error) {
-    console.error('Error saving notification:', error);
+    console.error('Storage: Error saving notification:', error);
+    throw error;
   }
 };
 
@@ -225,7 +246,7 @@ export const getNotifications = async (): Promise<Notification[]> => {
     const notificationsJson = await AsyncStorage.getItem(KEYS.NOTIFICATIONS);
     return notificationsJson ? JSON.parse(notificationsJson) : [];
   } catch (error) {
-    console.error('Error getting notifications:', error);
+    console.error('Storage: Error getting notifications:', error);
     return [];
   }
 };
@@ -237,9 +258,10 @@ export const markNotificationAsRead = async (notificationId: string): Promise<vo
       notif.id === notificationId ? { ...notif, read: true } : notif
     );
     await AsyncStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(updatedNotifications));
-    console.log('Notification marked as read');
+    console.log('Storage: Notification marked as read');
   } catch (error) {
-    console.error('Error marking notification as read:', error);
+    console.error('Storage: Error marking notification as read:', error);
+    throw error;
   }
 };
 
@@ -248,9 +270,10 @@ export const markAllNotificationsAsRead = async (): Promise<void> => {
     const notifications = await getNotifications();
     const updatedNotifications = notifications.map(notif => ({ ...notif, read: true }));
     await AsyncStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(updatedNotifications));
-    console.log('All notifications marked as read');
+    console.log('Storage: All notifications marked as read');
   } catch (error) {
-    console.error('Error marking all notifications as read:', error);
+    console.error('Storage: Error marking all notifications as read:', error);
+    throw error;
   }
 };
 
@@ -259,9 +282,10 @@ export const deleteNotification = async (notificationId: string): Promise<void> 
     const notifications = await getNotifications();
     const updatedNotifications = notifications.filter(notif => notif.id !== notificationId);
     await AsyncStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(updatedNotifications));
-    console.log('Notification deleted');
+    console.log('Storage: Notification deleted');
   } catch (error) {
-    console.error('Error deleting notification:', error);
+    console.error('Storage: Error deleting notification:', error);
+    throw error;
   }
 };
 
@@ -282,9 +306,10 @@ export const saveMonthlyReport = async (report: MonthlyReport): Promise<void> =>
     }
     
     await AsyncStorage.setItem(KEYS.MONTHLY_REPORTS, JSON.stringify(updatedReports));
-    console.log('Monthly report saved successfully');
+    console.log('Storage: Monthly report saved successfully');
   } catch (error) {
-    console.error('Error saving monthly report:', error);
+    console.error('Storage: Error saving monthly report:', error);
+    throw error;
   }
 };
 
@@ -293,7 +318,7 @@ export const getMonthlyReports = async (): Promise<MonthlyReport[]> => {
     const reportsJson = await AsyncStorage.getItem(KEYS.MONTHLY_REPORTS);
     return reportsJson ? JSON.parse(reportsJson) : [];
   } catch (error) {
-    console.error('Error getting monthly reports:', error);
+    console.error('Storage: Error getting monthly reports:', error);
     return [];
   }
 };
@@ -302,9 +327,10 @@ export const getMonthlyReports = async (): Promise<MonthlyReport[]> => {
 export const savePushToken = async (token: string): Promise<void> => {
   try {
     await AsyncStorage.setItem(KEYS.PUSH_TOKEN, token);
-    console.log('Push token saved successfully');
+    console.log('Storage: Push token saved successfully');
   } catch (error) {
-    console.error('Error saving push token:', error);
+    console.error('Storage: Error saving push token:', error);
+    throw error;
   }
 };
 
@@ -312,7 +338,7 @@ export const getPushToken = async (): Promise<string | null> => {
   try {
     return await AsyncStorage.getItem(KEYS.PUSH_TOKEN);
   } catch (error) {
-    console.error('Error getting push token:', error);
+    console.error('Storage: Error getting push token:', error);
     return null;
   }
 };
@@ -321,8 +347,9 @@ export const getPushToken = async (): Promise<string | null> => {
 export const clearAllData = async (): Promise<void> => {
   try {
     await AsyncStorage.clear();
-    console.log('All data cleared successfully');
+    console.log('Storage: All data cleared successfully');
   } catch (error) {
-    console.error('Error clearing data:', error);
+    console.error('Storage: Error clearing data:', error);
+    throw error;
   }
 };
