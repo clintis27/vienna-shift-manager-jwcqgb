@@ -1,4 +1,5 @@
 
+
 export type EmployeeCategory = 'breakfast' | 'housekeeping' | 'frontdesk';
 
 export interface User {
@@ -120,4 +121,35 @@ export interface MonthlyReport {
   overtimeHours: number;
   departments: string[];
   generatedAt: string;
+}
+
+export interface SickLeaveCertificate {
+  id: string;
+  employeeId: string;
+  fileName: string;
+  filePath: string;
+  fileSize?: number;
+  mimeType?: string;
+  startDate: string;
+  endDate: string;
+  notes?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  uploadedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
+
+export interface Employee {
+  id: string;
+  userId?: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: 'admin' | 'manager' | 'employee';
+  category?: EmployeeCategory;
+  department?: string;
+  phoneNumber?: string;
+  avatarUrl?: string;
+  createdAt: string;
+  updatedAt: string;
 }

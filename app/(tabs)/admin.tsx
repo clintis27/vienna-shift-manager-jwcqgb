@@ -1,5 +1,4 @@
 
-import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,354 +10,521 @@ import {
   Platform,
   TextInput,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconSymbol } from '@/components/IconSymbol';
-import { colors, darkColors, buttonStyles } from '@/styles/commonStyles';
-import { getUser, getShiftRequests, updateShiftRequest, saveShifts, getShifts } from '@/utils/storage';
+import { getCategoryColor, getCategoryName } from '@/utils/mockData';
 import { notifyApproval, notifyShiftChange } from '@/utils/notifications';
-import { User, ShiftRequest, Shift, EmployeeCategory } from '@/types';
-import { getCategoryColor, getCategoryName, mockUsers } from '@/utils/mockData';
+import { colors, darkColors, buttonStyles } from '@/styles/commonStyles';
 import { Calendar, DateData } from 'react-native-calendars';
+import React, { useState, useEffect } from 'react';
+import { getUser, getShiftRequests, updateShiftRequest, saveShifts, getShifts } from '@/utils/storage';
+import { IconSymbol } from '@/components/IconSymbol';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { User, ShiftRequest, Shift, EmployeeCategory, Employee } from '@/types';
+import { supabase } from '@/app/integrations/supabase/client';
 
 export default function AdminScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const theme = isDark ? darkColors : colors;
-
   const [user, setUser] = useState<User | null>(null);
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
-  const [allShifts, setAllShifts] = useState<Shift[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddShiftModal, setShowAddShiftModal] = useState(false);
-  const [showManageShiftsModal, setShowManageShiftsModal] = useState(false);
-  
-  // Add shift form state
-  const [selectedEmployee, setSelectedEmployee] = useState<User | null>(null);
   const [selectedDate, setSelectedDate] = useState('');
-  const [startTime, setStartTime] = useState('08:00');
-  const [endTime, setEndTime] = useState('16:00');
-  const [shiftNotes, setShiftNotes] = useState('');
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('17:00');
+  const [position, setPosition] = useState('');
+  const [notes, setNotes] = useState('');
+  const [showEmployeeSelector, setShowEmployeeSelector] = useState(false);
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const currentColors = isDark ? darkColors : colors;
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
-    const userData = await getUser();
-    setUser(userData);
+    try {
+      setLoading(true);
+      const currentUser = await getUser();
+      setUser(currentUser);
 
-    let allRequests = await getShiftRequests();
-    
-    // Filter requests based on admin category
-    if (userData?.role === 'admin' && userData.category) {
-      allRequests = allRequests.filter(r => r.category === userData.category);
-    }
+      if (currentUser?.role === 'admin') {
+        // Load employees from Supabase
+        await loadEmployees();
+        
+        // Load shift requests
+        const allRequests = await getShiftRequests();
+        const filteredRequests = currentUser.category
+          ? allRequests.filter(r => r.category === currentUser.category)
+          : allRequests;
+        setRequests(filteredRequests);
 
-    // Show only pending requests
-    const pendingRequests = allRequests.filter(r => r.status === 'pending');
-    setRequests(pendingRequests);
-    
-    // Load all shifts for this category
-    let shifts = await getShifts();
-    if (userData?.role === 'admin' && userData.category) {
-      shifts = shifts.filter(s => s.category === userData.category);
+        // Load shifts
+        const allShifts = await getShifts();
+        const filteredShifts = currentUser.category
+          ? allShifts.filter(s => s.category === currentUser.category)
+          : allShifts;
+        setShifts(filteredShifts);
+      }
+    } catch (error) {
+      console.error('Error loading admin data:', error);
+      Alert.alert('Error', 'Failed to load data');
+    } finally {
+      setLoading(false);
     }
-    setAllShifts(shifts);
-    
-    console.log('Loaded shift requests:', pendingRequests.length);
-    console.log('Loaded shifts:', shifts.length);
+  };
+
+  const loadEmployees = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .order('first_name', { ascending: true });
+
+      if (error) {
+        console.error('Error loading employees:', error);
+        return;
+      }
+
+      if (data) {
+        const mappedEmployees: Employee[] = data.map(emp => ({
+          id: emp.id,
+          userId: emp.user_id || undefined,
+          email: emp.email,
+          firstName: emp.first_name,
+          lastName: emp.last_name,
+          role: emp.role as 'admin' | 'manager' | 'employee',
+          category: emp.category as EmployeeCategory | undefined,
+          department: emp.department || undefined,
+          phoneNumber: emp.phone_number || undefined,
+          avatarUrl: emp.avatar_url || undefined,
+          createdAt: emp.created_at,
+          updatedAt: emp.updated_at,
+        }));
+        setEmployees(mappedEmployees);
+      }
+    } catch (error) {
+      console.error('Error loading employees:', error);
+    }
   };
 
   const handleApprove = async (request: ShiftRequest) => {
-    Alert.alert(
-      'Approve Request',
-      `Approve shift request for ${request.userName} on ${request.date}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Approve',
-          onPress: async () => {
-            // Update request status
-            await updateShiftRequest(request.id, { status: 'approved' });
+    try {
+      const updatedRequest = { ...request, status: 'approved' as const };
+      await updateShiftRequest(updatedRequest);
 
-            // Create a new shift
-            const shifts = await getShifts();
-            const newShift: Shift = {
-              id: `shift-${Date.now()}`,
-              userId: request.userId,
-              userName: request.userName,
-              department: getCategoryName(request.category),
-              category: request.category,
-              startTime: request.startTime,
-              endTime: request.endTime,
-              date: request.date,
-              status: 'scheduled',
-              position: 'Staff',
-              color: getCategoryColor(request.category),
-              notes: request.notes,
-            };
-            await saveShifts([...shifts, newShift]);
+      // Create a shift from the approved request
+      const newShift: Shift = {
+        id: `shift-${Date.now()}`,
+        userId: request.userId,
+        userName: request.userName,
+        department: getCategoryName(request.category),
+        category: request.category,
+        startTime: request.startTime,
+        endTime: request.endTime,
+        date: request.date,
+        status: 'scheduled',
+        position: 'Staff',
+        notes: request.notes,
+        color: getCategoryColor(request.category),
+      };
 
-            // Send notifications
-            const shiftDetails = `${request.date} ${request.startTime}-${request.endTime}`;
-            await notifyApproval(request.userId, 'shift', 'approved', shiftDetails);
-            await notifyShiftChange(request.userId, request.userName, 'new', shiftDetails);
+      const allShifts = await getShifts();
+      await saveShifts([...allShifts, newShift]);
 
-            Alert.alert('Success', 'Shift request approved and scheduled!');
-            await loadData();
-          },
-        },
-      ]
-    );
+      await notifyApproval(request.userId, 'shift', 'approved', `Shift on ${formatDate(request.date)}`);
+      
+      Alert.alert('Success', 'Shift request approved');
+      loadData();
+    } catch (error) {
+      console.error('Error approving request:', error);
+      Alert.alert('Error', 'Failed to approve request');
+    }
   };
 
   const handleReject = async (request: ShiftRequest) => {
-    Alert.alert(
-      'Reject Request',
-      `Reject shift request for ${request.userName} on ${request.date}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: async () => {
-            await updateShiftRequest(request.id, { status: 'rejected' });
-
-            // Send notification
-            const shiftDetails = `${request.date} ${request.startTime}-${request.endTime}`;
-            await notifyApproval(request.userId, 'shift', 'rejected', shiftDetails);
-
-            Alert.alert('Request Rejected', 'The shift request has been rejected.');
-            await loadData();
-          },
-        },
-      ]
-    );
+    try {
+      const updatedRequest = { ...request, status: 'rejected' as const };
+      await updateShiftRequest(updatedRequest);
+      await notifyApproval(request.userId, 'shift', 'rejected', `Shift on ${formatDate(request.date)}`);
+      
+      Alert.alert('Success', 'Shift request rejected');
+      loadData();
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+      Alert.alert('Error', 'Failed to reject request');
+    }
   };
 
   const handleAddShift = async () => {
-    if (!selectedEmployee || !selectedDate) {
-      Alert.alert('Error', 'Please select an employee and date');
+    if (!selectedEmployee || !selectedDate || !startTime || !endTime || !position) {
+      Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
-    if (!user?.category) {
-      Alert.alert('Error', 'Admin category not found');
-      return;
+    try {
+      const category = selectedEmployee.category || 'breakfast';
+      
+      // Add shift to Supabase
+      const { data, error } = await supabase
+        .from('shifts')
+        .insert({
+          employee_id: selectedEmployee.id,
+          department: selectedEmployee.department || getCategoryName(category),
+          category: category,
+          start_time: startTime,
+          end_time: endTime,
+          date: selectedDate,
+          status: 'scheduled',
+          position: position,
+          notes: notes || null,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding shift:', error);
+        Alert.alert('Error', 'Failed to add shift');
+        return;
+      }
+
+      // Also save to local storage for backward compatibility
+      const newShift: Shift = {
+        id: data.id,
+        userId: selectedEmployee.userId || selectedEmployee.id,
+        userName: `${selectedEmployee.firstName} ${selectedEmployee.lastName}`,
+        department: selectedEmployee.department || getCategoryName(category),
+        category: category,
+        startTime: startTime,
+        endTime: endTime,
+        date: selectedDate,
+        status: 'scheduled',
+        position: position,
+        notes: notes,
+        color: getCategoryColor(category),
+      };
+
+      const allShifts = await getShifts();
+      await saveShifts([...allShifts, newShift]);
+
+      if (selectedEmployee.userId) {
+        await notifyShiftChange(
+          selectedEmployee.userId,
+          `${selectedEmployee.firstName} ${selectedEmployee.lastName}`,
+          'new',
+          `${position} on ${formatDate(selectedDate)} from ${startTime} to ${endTime}`
+        );
+      }
+
+      Alert.alert('Success', 'Shift added successfully');
+      setShowAddShiftModal(false);
+      resetShiftForm();
+      loadData();
+    } catch (error) {
+      console.error('Error adding shift:', error);
+      Alert.alert('Error', 'Failed to add shift');
     }
-
-    const shifts = await getShifts();
-    const newShift: Shift = {
-      id: `shift-${Date.now()}`,
-      userId: selectedEmployee.id,
-      userName: `${selectedEmployee.firstName} ${selectedEmployee.lastName}`,
-      department: getCategoryName(user.category),
-      category: user.category,
-      startTime,
-      endTime,
-      date: selectedDate,
-      status: 'scheduled',
-      position: 'Staff',
-      color: getCategoryColor(user.category),
-      notes: shiftNotes,
-    };
-
-    await saveShifts([...shifts, newShift]);
-
-    // Send notification to employee
-    const shiftDetails = `${selectedDate} ${startTime}-${endTime}`;
-    await notifyShiftChange(selectedEmployee.id, newShift.userName, 'new', shiftDetails);
-
-    Alert.alert('Success', 'Shift added successfully!');
-    
-    // Reset form
-    setSelectedEmployee(null);
-    setSelectedDate('');
-    setStartTime('08:00');
-    setEndTime('16:00');
-    setShiftNotes('');
-    setShowAddShiftModal(false);
-    
-    await loadData();
   };
 
   const handleDeleteShift = async (shift: Shift) => {
     Alert.alert(
       'Delete Shift',
-      `Are you sure you want to delete the shift for ${shift.userName} on ${shift.date}?`,
+      'Are you sure you want to delete this shift?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const shifts = await getShifts();
-            const updatedShifts = shifts.filter(s => s.id !== shift.id);
-            await saveShifts(updatedShifts);
+            try {
+              // Delete from Supabase
+              const { error } = await supabase
+                .from('shifts')
+                .delete()
+                .eq('id', shift.id);
 
-            // Send notification to employee
-            const shiftDetails = `${shift.date} ${shift.startTime}-${shift.endTime}`;
-            await notifyShiftChange(shift.userId, shift.userName, 'cancelled', shiftDetails);
+              if (error) {
+                console.error('Error deleting shift:', error);
+              }
 
-            Alert.alert('Success', 'Shift deleted successfully!');
-            await loadData();
+              // Delete from local storage
+              const allShifts = await getShifts();
+              const updatedShifts = allShifts.filter(s => s.id !== shift.id);
+              await saveShifts(updatedShifts);
+
+              await notifyShiftChange(shift.userId, shift.userName, 'cancelled', `${shift.position} on ${formatDate(shift.date)}`);
+              
+              Alert.alert('Success', 'Shift deleted successfully');
+              loadData();
+            } catch (error) {
+              console.error('Error deleting shift:', error);
+              Alert.alert('Error', 'Failed to delete shift');
+            }
           },
         },
       ]
     );
   };
 
-  const getEmployeesForCategory = (): User[] => {
-    if (!user?.category) return [];
-    return mockUsers.filter(u => u.category === user.category && u.role === 'employee');
+  const resetShiftForm = () => {
+    setSelectedDate('');
+    setSelectedEmployee(null);
+    setStartTime('09:00');
+    setEndTime('17:00');
+    setPosition('');
+    setNotes('');
+  };
+
+  const getEmployeesForCategory = () => {
+    if (!user?.category) {
+      return employees;
+    }
+    return employees.filter(emp => emp.category === user.category);
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'pending':
+        return '#FFA726';
       case 'approved':
-        return theme.success;
+        return '#66BB6A';
       case 'rejected':
-        return theme.error;
+        return '#EF5350';
       default:
-        return theme.warning;
+        return currentColors.text;
     }
   };
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.title, { color: theme.text }]}>
-            Admin Panel
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: currentColors.background }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={currentColors.primary} />
+          <Text style={[styles.loadingText, { color: currentColors.text }]}>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!user || user.role !== 'admin') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: currentColors.background }]}>
+        <View style={styles.errorContainer}>
+          <IconSymbol name="exclamationmark.triangle" size={48} color={currentColors.error} />
+          <Text style={[styles.errorText, { color: currentColors.text }]}>
+            Access Denied
           </Text>
-          {user?.category && (
-            <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(user.category) }]}>
-              <Text style={[styles.categoryText, { color: theme.card }]}>
-                {getCategoryName(user.category).toUpperCase()}
+          <Text style={[styles.errorSubtext, { color: currentColors.textSecondary }]}>
+            You need admin privileges to access this page
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const availableEmployees = getEmployeesForCategory();
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: currentColors.background }]}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: currentColors.text }]}>Admin Panel</Text>
+          {user.category && (
+            <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(user.category) + '20' }]}>
+              <Text style={[styles.categoryText, { color: getCategoryColor(user.category) }]}>
+                {getCategoryName(user.category)}
               </Text>
             </View>
           )}
         </View>
-      </View>
 
-      {/* Action Buttons */}
-      <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={[buttonStyles.pastelBlue, styles.actionBtn]}
-          onPress={() => setShowAddShiftModal(true)}
-        >
-          <IconSymbol name="plus.circle.fill" size={20} color={theme.text} />
-          <Text style={[buttonStyles.text, { color: theme.text }]}>
-            Add Shift
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[buttonStyles.pastelPurple, styles.actionBtn]}
-          onPress={() => setShowManageShiftsModal(true)}
-        >
-          <IconSymbol name="list.bullet" size={20} color={theme.text} />
-          <Text style={[buttonStyles.text, { color: theme.text }]}>
-            Manage Shifts
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Pending Requests */}
+        {/* Employees Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>
-            Pending Shift Requests ({requests.length})
-          </Text>
-
-          {requests.length === 0 ? (
-            <View style={[styles.emptyState, { backgroundColor: theme.card }]}>
-              <IconSymbol name="checkmark.circle" size={64} color={theme.success} />
-              <Text style={[styles.emptyTitle, { color: theme.text }]}>
-                All Caught Up!
-              </Text>
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                No pending shift requests at the moment
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: currentColors.text }]}>
+              Employees ({availableEmployees.length})
+            </Text>
+          </View>
+          
+          {availableEmployees.length === 0 ? (
+            <View style={[styles.emptyCard, { backgroundColor: currentColors.card }]}>
+              <IconSymbol name="person.2" size={32} color={currentColors.textSecondary} />
+              <Text style={[styles.emptyText, { color: currentColors.textSecondary }]}>
+                No employees found
               </Text>
             </View>
           ) : (
-            requests.map((request) => (
-              <View
-                key={request.id}
-                style={[styles.requestCard, { backgroundColor: theme.card }]}
-              >
-                <View style={styles.requestHeader}>
-                  <View style={[styles.categoryDot, { backgroundColor: getCategoryColor(request.category) }]} />
-                  <View style={styles.requestInfo}>
-                    <Text style={[styles.requestName, { color: theme.text }]}>
-                      {request.userName}
+            availableEmployees.map((employee) => (
+              <View key={employee.id} style={[styles.employeeCard, { backgroundColor: currentColors.card }]}>
+                <View style={styles.employeeInfo}>
+                  <View style={[styles.employeeAvatar, { backgroundColor: currentColors.primary + '20' }]}>
+                    <Text style={[styles.employeeInitials, { color: currentColors.primary }]}>
+                      {employee.firstName[0]}{employee.lastName[0]}
                     </Text>
-                    <Text style={[styles.requestCategory, { color: theme.textSecondary }]}>
-                      {getCategoryName(request.category)}
+                  </View>
+                  <View style={styles.employeeDetails}>
+                    <Text style={[styles.employeeName, { color: currentColors.text }]}>
+                      {employee.firstName} {employee.lastName}
                     </Text>
+                    <Text style={[styles.employeeEmail, { color: currentColors.textSecondary }]}>
+                      {employee.email}
+                    </Text>
+                    {employee.department && (
+                      <Text style={[styles.employeeDepartment, { color: currentColors.textSecondary }]}>
+                        {employee.department}
+                      </Text>
+                    )}
                   </View>
                 </View>
-
-                <View style={styles.requestDetails}>
-                  <View style={styles.detailRow}>
-                    <IconSymbol name="calendar" size={16} color={theme.textSecondary} />
-                    <Text style={[styles.detailText, { color: theme.text }]}>
-                      {formatDate(request.date)}
-                    </Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <IconSymbol name="clock" size={16} color={theme.textSecondary} />
-                    <Text style={[styles.detailText, { color: theme.text }]}>
-                      {request.startTime} - {request.endTime}
-                    </Text>
-                  </View>
-                </View>
-
-                {request.notes && (
-                  <View style={[styles.notesContainer, { backgroundColor: theme.background }]}>
-                    <Text style={[styles.notesText, { color: theme.textSecondary }]}>
-                      {request.notes}
-                    </Text>
-                  </View>
-                )}
-
-                <View style={styles.requestActions}>
-                  <TouchableOpacity
-                    style={[buttonStyles.pastelMint, styles.actionButton]}
-                    onPress={() => handleApprove(request)}
-                  >
-                    <IconSymbol name="checkmark" size={20} color={theme.text} />
-                    <Text style={[buttonStyles.text, { color: theme.text }]}>
-                      Approve
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[buttonStyles.pastelPink, styles.actionButton]}
-                    onPress={() => handleReject(request)}
-                  >
-                    <IconSymbol name="xmark" size={20} color={theme.text} />
-                    <Text style={[buttonStyles.text, { color: theme.text }]}>
-                      Reject
-                    </Text>
-                  </TouchableOpacity>
+                <View style={[styles.roleBadge, { backgroundColor: employee.role === 'admin' ? '#EF5350' : '#66BB6A' }]}>
+                  <Text style={styles.roleBadgeText}>{employee.role}</Text>
                 </View>
               </View>
             ))
           )}
         </View>
 
-        {/* Bottom Spacing for Tab Bar */}
-        <View style={{ height: 100 }} />
+        {/* Shift Requests Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: currentColors.text }]}>
+              Shift Requests
+            </Text>
+          </View>
+
+          {requests.filter(r => r.status === 'pending').length === 0 ? (
+            <View style={[styles.emptyCard, { backgroundColor: currentColors.card }]}>
+              <IconSymbol name="checkmark.circle" size={32} color={currentColors.textSecondary} />
+              <Text style={[styles.emptyText, { color: currentColors.textSecondary }]}>
+                No pending requests
+              </Text>
+            </View>
+          ) : (
+            requests
+              .filter(r => r.status === 'pending')
+              .map((request) => (
+                <View key={request.id} style={[styles.requestCard, { backgroundColor: currentColors.card }]}>
+                  <View style={styles.requestHeader}>
+                    <Text style={[styles.requestName, { color: currentColors.text }]}>
+                      {request.userName}
+                    </Text>
+                    <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(request.category) + '20' }]}>
+                      <Text style={[styles.categoryText, { color: getCategoryColor(request.category) }]}>
+                        {getCategoryName(request.category)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.requestDetails}>
+                    <View style={styles.requestRow}>
+                      <IconSymbol name="calendar" size={16} color={currentColors.textSecondary} />
+                      <Text style={[styles.requestText, { color: currentColors.textSecondary }]}>
+                        {formatDate(request.date)}
+                      </Text>
+                    </View>
+                    <View style={styles.requestRow}>
+                      <IconSymbol name="clock" size={16} color={currentColors.textSecondary} />
+                      <Text style={[styles.requestText, { color: currentColors.textSecondary }]}>
+                        {request.startTime} - {request.endTime}
+                      </Text>
+                    </View>
+                  </View>
+                  {request.notes && (
+                    <Text style={[styles.requestNotes, { color: currentColors.textSecondary }]}>
+                      {request.notes}
+                    </Text>
+                  )}
+                  <View style={styles.requestActions}>
+                    <TouchableOpacity
+                      style={[buttonStyles.secondary, styles.actionButton, { borderColor: '#EF5350' }]}
+                      onPress={() => handleReject(request)}
+                    >
+                      <Text style={[buttonStyles.secondaryText, { color: '#EF5350' }]}>Reject</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[buttonStyles.primary, styles.actionButton, { backgroundColor: '#66BB6A' }]}
+                      onPress={() => handleApprove(request)}
+                    >
+                      <Text style={buttonStyles.primaryText}>Approve</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+          )}
+        </View>
+
+        {/* Manage Shifts Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: currentColors.text }]}>
+              Manage Shifts
+            </Text>
+            <TouchableOpacity
+              style={[buttonStyles.primary, styles.addButton]}
+              onPress={() => setShowAddShiftModal(true)}
+            >
+              <IconSymbol name="plus" size={20} color="#FFFFFF" />
+              <Text style={buttonStyles.primaryText}>Add Shift</Text>
+            </TouchableOpacity>
+          </View>
+
+          {shifts.length === 0 ? (
+            <View style={[styles.emptyCard, { backgroundColor: currentColors.card }]}>
+              <IconSymbol name="calendar" size={32} color={currentColors.textSecondary} />
+              <Text style={[styles.emptyText, { color: currentColors.textSecondary }]}>
+                No shifts scheduled
+              </Text>
+            </View>
+          ) : (
+            shifts.slice(0, 10).map((shift) => (
+              <View key={shift.id} style={[styles.shiftCard, { backgroundColor: currentColors.card }]}>
+                <View style={styles.shiftHeader}>
+                  <View>
+                    <Text style={[styles.shiftName, { color: currentColors.text }]}>
+                      {shift.userName}
+                    </Text>
+                    <Text style={[styles.shiftPosition, { color: currentColors.textSecondary }]}>
+                      {shift.position}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteShift(shift)}
+                  >
+                    <IconSymbol name="trash" size={20} color="#EF5350" />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.shiftDetails}>
+                  <View style={styles.shiftRow}>
+                    <IconSymbol name="calendar" size={16} color={currentColors.textSecondary} />
+                    <Text style={[styles.shiftText, { color: currentColors.textSecondary }]}>
+                      {formatDate(shift.date)}
+                    </Text>
+                  </View>
+                  <View style={styles.shiftRow}>
+                    <IconSymbol name="clock" size={16} color={currentColors.textSecondary} />
+                    <Text style={[styles.shiftText, { color: currentColors.textSecondary }]}>
+                      {shift.startTime} - {shift.endTime}
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(shift.status) + '20' }]}>
+                  <Text style={[styles.statusText, { color: getStatusColor(shift.status) }]}>
+                    {shift.status}
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
       </ScrollView>
 
       {/* Add Shift Modal */}
@@ -369,193 +535,148 @@ export default function AdminScreen() {
         onRequestClose={() => setShowAddShiftModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+          <View style={[styles.modalContent, { backgroundColor: currentColors.card }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>
-                Add New Shift
-              </Text>
+              <Text style={[styles.modalTitle, { color: currentColors.text }]}>Add New Shift</Text>
               <TouchableOpacity onPress={() => setShowAddShiftModal(false)}>
-                <IconSymbol name="xmark.circle.fill" size={28} color={theme.textSecondary} />
+                <IconSymbol name="xmark" size={24} color={currentColors.text} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {/* Employee Selection */}
-              <Text style={[styles.label, { color: theme.text }]}>Select Employee</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.employeeList}>
-                {getEmployeesForCategory().map((emp) => (
-                  <TouchableOpacity
-                    key={emp.id}
-                    style={[
-                      styles.employeeCard,
-                      { backgroundColor: theme.background },
-                      selectedEmployee?.id === emp.id && { 
-                        backgroundColor: getCategoryColor(user?.category || 'breakfast'),
-                        borderWidth: 2,
-                        borderColor: theme.text,
-                      }
-                    ]}
-                    onPress={() => setSelectedEmployee(emp)}
-                  >
-                    <Text style={[
-                      styles.employeeName,
-                      { color: theme.text },
-                      selectedEmployee?.id === emp.id && { fontWeight: '700' }
-                    ]}>
-                      {emp.firstName} {emp.lastName}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              <Text style={[styles.label, { color: currentColors.text }]}>Employee *</Text>
+              <TouchableOpacity
+                style={[styles.input, { backgroundColor: currentColors.background, borderColor: currentColors.border }]}
+                onPress={() => setShowEmployeeSelector(true)}
+              >
+                <Text style={[styles.inputText, { color: selectedEmployee ? currentColors.text : currentColors.textSecondary }]}>
+                  {selectedEmployee ? `${selectedEmployee.firstName} ${selectedEmployee.lastName}` : 'Select Employee'}
+                </Text>
+                <IconSymbol name="chevron.down" size={20} color={currentColors.textSecondary} />
+              </TouchableOpacity>
 
               {/* Date Selection */}
-              <Text style={[styles.label, { color: theme.text }]}>Select Date</Text>
+              <Text style={[styles.label, { color: currentColors.text }]}>Date *</Text>
               <Calendar
                 onDayPress={(day: DateData) => setSelectedDate(day.dateString)}
                 markedDates={{
-                  [selectedDate]: { selected: true, selectedColor: getCategoryColor(user?.category || 'breakfast') }
+                  [selectedDate]: { selected: true, selectedColor: currentColors.primary },
                 }}
                 theme={{
-                  backgroundColor: theme.card,
-                  calendarBackground: theme.card,
-                  textSectionTitleColor: theme.text,
-                  selectedDayBackgroundColor: getCategoryColor(user?.category || 'breakfast'),
-                  selectedDayTextColor: theme.card,
-                  todayTextColor: getCategoryColor(user?.category || 'breakfast'),
-                  dayTextColor: theme.text,
-                  textDisabledColor: theme.textSecondary,
-                  monthTextColor: theme.text,
-                  arrowColor: theme.text,
+                  backgroundColor: currentColors.card,
+                  calendarBackground: currentColors.card,
+                  textSectionTitleColor: currentColors.text,
+                  selectedDayBackgroundColor: currentColors.primary,
+                  selectedDayTextColor: '#FFFFFF',
+                  todayTextColor: currentColors.primary,
+                  dayTextColor: currentColors.text,
+                  textDisabledColor: currentColors.textSecondary,
+                  monthTextColor: currentColors.text,
+                  arrowColor: currentColors.primary,
                 }}
-                minDate={new Date().toISOString().split('T')[0]}
               />
 
               {/* Time Selection */}
-              <View style={styles.timeRow}>
-                <View style={styles.timeInput}>
-                  <Text style={[styles.label, { color: theme.text }]}>Start Time</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
-                    value={startTime}
-                    onChangeText={setStartTime}
-                    placeholder="08:00"
-                    placeholderTextColor={theme.textSecondary}
-                  />
-                </View>
-                <View style={styles.timeInput}>
-                  <Text style={[styles.label, { color: theme.text }]}>End Time</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
-                    value={endTime}
-                    onChangeText={setEndTime}
-                    placeholder="16:00"
-                    placeholderTextColor={theme.textSecondary}
-                  />
-                </View>
-              </View>
+              <Text style={[styles.label, { color: currentColors.text }]}>Start Time *</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: currentColors.background, borderColor: currentColors.border, color: currentColors.text }]}
+                value={startTime}
+                onChangeText={setStartTime}
+                placeholder="09:00"
+                placeholderTextColor={currentColors.textSecondary}
+              />
+
+              <Text style={[styles.label, { color: currentColors.text }]}>End Time *</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: currentColors.background, borderColor: currentColors.border, color: currentColors.text }]}
+                value={endTime}
+                onChangeText={setEndTime}
+                placeholder="17:00"
+                placeholderTextColor={currentColors.textSecondary}
+              />
+
+              {/* Position */}
+              <Text style={[styles.label, { color: currentColors.text }]}>Position *</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: currentColors.background, borderColor: currentColors.border, color: currentColors.text }]}
+                value={position}
+                onChangeText={setPosition}
+                placeholder="e.g., Server, Housekeeper, Receptionist"
+                placeholderTextColor={currentColors.textSecondary}
+              />
 
               {/* Notes */}
-              <Text style={[styles.label, { color: theme.text }]}>Notes (Optional)</Text>
+              <Text style={[styles.label, { color: currentColors.text }]}>Notes</Text>
               <TextInput
-                style={[styles.textArea, { backgroundColor: theme.background, color: theme.text }]}
-                value={shiftNotes}
-                onChangeText={setShiftNotes}
-                placeholder="Add any notes about this shift..."
-                placeholderTextColor={theme.textSecondary}
+                style={[styles.input, styles.textArea, { backgroundColor: currentColors.background, borderColor: currentColors.border, color: currentColors.text }]}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Additional notes..."
+                placeholderTextColor={currentColors.textSecondary}
                 multiline
                 numberOfLines={3}
               />
 
-              {/* Add Button */}
               <TouchableOpacity
-                style={[buttonStyles.pastelMint, styles.submitButton]}
+                style={[buttonStyles.primary, styles.submitButton]}
                 onPress={handleAddShift}
               >
-                <IconSymbol name="checkmark.circle.fill" size={20} color={theme.text} />
-                <Text style={[buttonStyles.text, { color: theme.text }]}>
-                  Add Shift
-                </Text>
+                <Text style={buttonStyles.primaryText}>Add Shift</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* Manage Shifts Modal */}
+      {/* Employee Selector Modal */}
       <Modal
-        visible={showManageShiftsModal}
+        visible={showEmployeeSelector}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowManageShiftsModal(false)}
+        onRequestClose={() => setShowEmployeeSelector(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
+          <View style={[styles.modalContent, { backgroundColor: currentColors.card }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>
-                Manage Shifts
-              </Text>
-              <TouchableOpacity onPress={() => setShowManageShiftsModal(false)}>
-                <IconSymbol name="xmark.circle.fill" size={28} color={theme.textSecondary} />
+              <Text style={[styles.modalTitle, { color: currentColors.text }]}>Select Employee</Text>
+              <TouchableOpacity onPress={() => setShowEmployeeSelector(false)}>
+                <IconSymbol name="xmark" size={24} color={currentColors.text} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
-              {allShifts.length === 0 ? (
-                <View style={[styles.emptyState, { backgroundColor: theme.background }]}>
-                  <IconSymbol name="calendar.badge.exclamationmark" size={64} color={theme.textSecondary} />
-                  <Text style={[styles.emptyTitle, { color: theme.text }]}>
-                    No Shifts Found
-                  </Text>
-                  <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                    Add shifts to get started
-                  </Text>
-                </View>
-              ) : (
-                allShifts.map((shift) => (
-                  <View
-                    key={shift.id}
-                    style={[styles.shiftCard, { backgroundColor: theme.background }]}
-                  >
-                    <View style={styles.shiftHeader}>
-                      <View style={[styles.categoryDot, { backgroundColor: getCategoryColor(shift.category) }]} />
-                      <View style={styles.shiftInfo}>
-                        <Text style={[styles.shiftName, { color: theme.text }]}>
-                          {shift.userName}
-                        </Text>
-                        <Text style={[styles.shiftDate, { color: theme.textSecondary }]}>
-                          {formatDate(shift.date)}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.deleteButton, { backgroundColor: theme.card }]}
-                        onPress={() => handleDeleteShift(shift)}
-                      >
-                        <IconSymbol name="trash" size={20} color={theme.error} />
-                      </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.shiftDetails}>
-                      <View style={styles.detailRow}>
-                        <IconSymbol name="clock" size={16} color={theme.textSecondary} />
-                        <Text style={[styles.detailText, { color: theme.text }]}>
-                          {shift.startTime} - {shift.endTime}
-                        </Text>
-                      </View>
-                      <View style={[styles.statusBadge, { backgroundColor: theme.card }]}>
-                        <Text style={[styles.statusText, { color: theme.text }]}>
-                          {shift.status}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {shift.notes && (
-                      <Text style={[styles.shiftNotes, { color: theme.textSecondary }]}>
-                        {shift.notes}
-                      </Text>
-                    )}
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {availableEmployees.map((employee) => (
+                <TouchableOpacity
+                  key={employee.id}
+                  style={[
+                    styles.employeeSelectorItem,
+                    { backgroundColor: currentColors.background },
+                    selectedEmployee?.id === employee.id && { borderColor: currentColors.primary, borderWidth: 2 }
+                  ]}
+                  onPress={() => {
+                    setSelectedEmployee(employee);
+                    setShowEmployeeSelector(false);
+                  }}
+                >
+                  <View style={[styles.employeeAvatar, { backgroundColor: currentColors.primary + '20' }]}>
+                    <Text style={[styles.employeeInitials, { color: currentColors.primary }]}>
+                      {employee.firstName[0]}{employee.lastName[0]}
+                    </Text>
                   </View>
-                ))
-              )}
+                  <View style={styles.employeeDetails}>
+                    <Text style={[styles.employeeName, { color: currentColors.text }]}>
+                      {employee.firstName} {employee.lastName}
+                    </Text>
+                    <Text style={[styles.employeeEmail, { color: currentColors.textSecondary }]}>
+                      {employee.department || 'No department'}
+                    </Text>
+                  </View>
+                  {selectedEmployee?.id === employee.id && (
+                    <IconSymbol name="checkmark.circle.fill" size={24} color={currentColors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
             </ScrollView>
           </View>
         </View>
@@ -568,106 +689,167 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  errorText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 16,
+  },
+  errorSubtext: {
+    fontSize: 16,
+    marginTop: 8,
+    textAlign: 'center',
+  },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    padding: 24,
+    paddingBottom: 16,
   },
   title: {
     fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -0.5,
+    fontWeight: 'bold',
     marginBottom: 8,
   },
   categoryBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
     alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginTop: 8,
   },
   categoryText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    gap: 12,
-    marginBottom: 16,
-  },
-  actionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  scrollContent: {
-    padding: 24,
+    fontSize: 14,
+    fontWeight: '600',
   },
   section: {
-    marginBottom: 24,
+    padding: 24,
+    paddingTop: 0,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 16,
-    letterSpacing: -0.3,
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  emptyCard: {
+    padding: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    marginTop: 12,
+  },
+  employeeCard: {
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  employeeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  employeeAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  employeeInitials: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  employeeDetails: {
+    flex: 1,
+  },
+  employeeName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  employeeEmail: {
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  employeeDepartment: {
+    fontSize: 12,
+  },
+  roleBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  roleBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
   requestCard: {
+    padding: 16,
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
+    marginBottom: 12,
   },
   requestHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  categoryDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 12,
-  },
-  requestInfo: {
-    flex: 1,
+    marginBottom: 12,
   },
   requestName: {
     fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  requestCategory: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   requestDetails: {
-    flexDirection: 'row',
-    gap: 20,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  detailRow: {
+  requestRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    marginBottom: 8,
   },
-  detailText: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  notesContainer: {
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  notesText: {
+  requestText: {
     fontSize: 14,
-    lineHeight: 20,
+  },
+  requestNotes: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    marginBottom: 12,
   },
   requestActions: {
     flexDirection: 'row',
@@ -675,27 +857,51 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  shiftCard: {
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  shiftHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  shiftName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  shiftPosition: {
+    fontSize: 14,
+  },
+  deleteButton: {
+    padding: 8,
+  },
+  shiftDetails: {
+    marginBottom: 12,
+  },
+  shiftRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
-  },
-  emptyState: {
-    borderRadius: 20,
-    padding: 48,
-    alignItems: 'center',
-    boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.06)',
-    elevation: 2,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginTop: 16,
     marginBottom: 8,
   },
-  emptyText: {
-    fontSize: 15,
-    textAlign: 'center',
+  shiftText: {
+    fontSize: 14,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
   modalOverlay: {
     flex: 1,
@@ -706,120 +912,67 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '90%',
-    boxShadow: '0px -4px 20px rgba(0, 0, 0, 0.1)',
-    elevation: 5,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+    paddingBottom: 16,
   },
   modalTitle: {
     fontSize: 24,
-    fontWeight: '700',
-    letterSpacing: -0.3,
+    fontWeight: 'bold',
   },
   modalBody: {
     padding: 24,
+    paddingTop: 0,
   },
   label: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 12,
+    marginBottom: 8,
     marginTop: 16,
   },
-  employeeList: {
-    marginBottom: 8,
-  },
-  employeeCard: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginRight: 12,
-  },
-  employeeName: {
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  timeRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  timeInput: {
-    flex: 1,
-  },
   input: {
+    borderWidth: 1,
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
-    fontWeight: '500',
-  },
-  textArea: {
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    fontWeight: '500',
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  submitButton: {
-    marginTop: 24,
-    marginBottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  shiftCard: {
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  shiftHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  shiftInfo: {
-    flex: 1,
-  },
-  shiftName: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  shiftDate: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  deleteButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shiftDetails: {
+    marginBottom: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
+  inputText: {
+    fontSize: 16,
   },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
+  textArea: {
+    height: 100,
+    textAlignVertical: 'top',
   },
-  shiftNotes: {
-    fontSize: 13,
-    marginTop: 8,
-    fontStyle: 'italic',
+  submitButton: {
+    marginTop: 24,
+    marginBottom: 24,
+  },
+  employeeSelectorItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
 });

@@ -1,3 +1,4 @@
+
 export type Json =
   | string
   | number
@@ -9,7 +10,141 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      employees: {
+        Row: {
+          id: string
+          user_id: string | null
+          email: string
+          first_name: string
+          last_name: string
+          role: string
+          category: string | null
+          department: string | null
+          phone_number: string | null
+          avatar_url: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          email: string
+          first_name: string
+          last_name: string
+          role: string
+          category?: string | null
+          department?: string | null
+          phone_number?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          email?: string
+          first_name?: string
+          last_name?: string
+          role?: string
+          category?: string | null
+          department?: string | null
+          phone_number?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      sick_leave_certificates: {
+        Row: {
+          id: string
+          employee_id: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          mime_type: string | null
+          start_date: string
+          end_date: string
+          notes: string | null
+          status: string
+          uploaded_at: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          mime_type?: string | null
+          start_date: string
+          end_date: string
+          notes?: string | null
+          status?: string
+          uploaded_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+        Update: {
+          id?: string
+          employee_id?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          mime_type?: string | null
+          start_date?: string
+          end_date?: string
+          notes?: string | null
+          status?: string
+          uploaded_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+        }
+      }
+      shifts: {
+        Row: {
+          id: string
+          employee_id: string
+          department: string
+          category: string
+          start_time: string
+          end_time: string
+          date: string
+          status: string
+          position: string
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          department: string
+          category: string
+          start_time: string
+          end_time: string
+          date: string
+          status?: string
+          position: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          employee_id?: string
+          department?: string
+          category?: string
+          start_time?: string
+          end_time?: string
+          date?: string
+          status?: string
+          position?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
