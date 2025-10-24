@@ -54,6 +54,18 @@ export default function TabLayout() {
       route: '/(tabs)/time-tracking',
     },
     {
+      name: 'notifications',
+      title: 'Notifications',
+      icon: 'bell',
+      route: '/(tabs)/notifications',
+    },
+    {
+      name: 'reports',
+      title: 'Reports',
+      icon: 'doc.text',
+      route: '/(tabs)/reports',
+    },
+    {
       name: 'profile',
       title: 'Profile',
       icon: 'person',
@@ -108,6 +120,20 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="notifications"
+          options={{
+            title: 'Notifications',
+            tabBarIcon: ({ color }) => <IconSymbol name="bell" size={24} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="reports"
+          options={{
+            title: 'Reports',
+            tabBarIcon: ({ color }) => <IconSymbol name="doc.text" size={24} color={color} />,
+          }}
+        />
+        <Tabs.Screen
           name="profile"
           options={{
             title: 'Profile',
@@ -131,6 +157,8 @@ export default function TabLayout() {
         <Tabs.Screen name="availability" />
         {isAdmin && <Tabs.Screen name="admin" />}
         <Tabs.Screen name="time-tracking" />
+        <Tabs.Screen name="notifications" />
+        <Tabs.Screen name="reports" />
         <Tabs.Screen name="profile" />
       </Tabs>
     </>

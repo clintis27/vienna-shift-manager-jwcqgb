@@ -1,7 +1,8 @@
+
 {
   "expo": {
-    "name": "Natively",
-    "slug": "Natively",
+    "name": "Hotel House of Vienna",
+    "slug": "hotel-house-vienna",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/natively-dark.png",
@@ -10,22 +11,38 @@
     "splash": {
       "image": "./assets/images/natively-dark.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#B8C5B8"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Natively",
+      "bundleIdentifier": "com.hotelhousevienna.shiftmanager",
+      "buildNumber": "1.0.0",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location for GPS-based time tracking.",
+        "NSLocationAlwaysUsageDescription": "This app needs access to your location for GPS-based time tracking.",
+        "NSCameraUsageDescription": "This app needs access to your camera to upload sick leave certificates.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload sick leave certificates.",
+        "NSFaceIDUsageDescription": "This app uses Face ID for secure biometric authentication."
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/natively-dark.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#B8C5B8"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively"
+      "package": "com.hotelhousevienna.shiftmanager",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
@@ -34,14 +51,36 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Hotel House of Vienna to use your location for GPS-based time tracking."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Hotel House of Vienna to access your photos to upload sick leave certificates.",
+          "cameraPermission": "Allow Hotel House of Vienna to access your camera to upload sick leave certificates."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Hotel House of Vienna to use Face ID for secure authentication."
+        }
+      ]
     ],
-    "scheme": "natively",
+    "scheme": "hotelhousevienna",
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "your-eas-project-id"
+      }
     }
   }
 }

@@ -1,16 +1,50 @@
+
 {
+  "cli": {
+    "version": ">= 5.0.0"
+  },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "autoIncrement": true
+      "ios": {
+        "simulator": true
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "preview": {
       "distribution": "internal",
-      "autoIncrement": true
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "ios": {
+        "simulator": false,
+        "bundleIdentifier": "com.hotelhousevienna.shiftmanager"
+      },
+      "android": {
+        "buildType": "apk",
+        "package": "com.hotelhousevienna.shiftmanager"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "your-apple-id@email.com",
+        "ascAppId": "your-app-store-connect-app-id",
+        "appleTeamId": "your-apple-team-id"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./path-to-service-account-key.json",
+        "track": "production"
+      }
     }
   }
 }
