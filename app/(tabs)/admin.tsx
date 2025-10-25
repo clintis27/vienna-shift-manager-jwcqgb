@@ -16,7 +16,7 @@ import { getCategoryColor, getCategoryName } from '@/utils/mockData';
 import { notifyApproval, notifyShiftChange } from '@/utils/notifications';
 import { colors, darkColors, buttonStyles } from '@/styles/commonStyles';
 import { Calendar, DateData } from 'react-native-calendars';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getUser, getShiftRequests, updateShiftRequest, saveShifts, getShifts } from '@/utils/storage';
 import { IconSymbol } from '@/components/IconSymbol';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,7 +41,43 @@ export default function AdminScreen() {
   const isDark = colorScheme === 'dark';
   const currentColors = isDark ? darkColors : colors;
 
-  const loadEmployees = useCallback(async () => {
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const currentUser = await getUser();
+      setUser(currentUser);
+
+      if (currentUser?.role === 'admin') {
+        // Load employees from Supabase
+        await loadEmployees();
+        
+        // Load shift requests
+        const allRequests = await getShiftRequests();
+        const filteredRequests = currentUser.category
+          ? allRequests.filter(r => r.category === currentUser.category)
+          : allRequests;
+        setRequests(filteredRequests);
+
+        // Load shifts
+        const allShifts = await getShifts();
+        const filteredShifts = currentUser.category
+          ? allShifts.filter(s => s.category === currentUser.category)
+          : allShifts;
+        setShifts(filteredShifts);
+      }
+    } catch (error) {
+      console.error('Error loading admin data:', error);
+      Alert.alert('Error', 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadEmployees = async () => {
     try {
       const { data, error } = await supabase
         .from('employees')
@@ -73,43 +109,7 @@ export default function AdminScreen() {
     } catch (error) {
       console.error('Error loading employees:', error);
     }
-  }, []);
-
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const currentUser = await getUser();
-      setUser(currentUser);
-
-      if (currentUser?.role === 'admin') {
-        // Load employees from Supabase
-        await loadEmployees();
-        
-        // Load shift requests
-        const allRequests = await getShiftRequests();
-        const filteredRequests = currentUser.category
-          ? allRequests.filter(r => r.category === currentUser.category)
-          : allRequests;
-        setRequests(filteredRequests);
-
-        // Load shifts
-        const allShifts = await getShifts();
-        const filteredShifts = currentUser.category
-          ? allShifts.filter(s => s.category === currentUser.category)
-          : allShifts;
-        setShifts(filteredShifts);
-      }
-    } catch (error) {
-      console.error('Error loading admin data:', error);
-      Alert.alert('Error', 'Failed to load data');
-    } finally {
-      setLoading(false);
-    }
-  }, [loadEmployees]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  };
 
   const handleApprove = async (request: ShiftRequest) => {
     try {

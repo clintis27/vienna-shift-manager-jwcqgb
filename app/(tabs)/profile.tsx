@@ -49,6 +49,13 @@ export default function ProfileScreen() {
   const [notes, setNotes] = useState('');
   const [certificates, setCertificates] = useState<SickLeaveCertificate[]>([]);
 
+  useEffect(() => {
+    if (user) {
+      setNotificationPrefs(user.notificationPreferences || notificationPrefs);
+      loadCertificates(user.id);
+    }
+  }, [user]);
+
   const loadCertificates = async (employeeId: string) => {
     try {
       const { data, error } = await supabase
@@ -63,19 +70,6 @@ export default function ProfileScreen() {
       console.error('Error loading certificates:', error);
     }
   };
-
-  useEffect(() => {
-    if (user) {
-      const prefs = user.notificationPreferences || {
-        shiftChanges: true,
-        reminders: true,
-        approvals: true,
-        pushEnabled: true,
-      };
-      setNotificationPrefs(prefs);
-      loadCertificates(user.id);
-    }
-  }, [user]);
 
   const handleNotificationPrefChange = async (
     key: keyof NotificationPreferences,
