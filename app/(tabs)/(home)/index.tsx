@@ -1,101 +1,51 @@
 
-import {
-  View,
-  Text,
-  StyleSheet,
-  useColorScheme,
-  RefreshControl,
-  Platform,
-} from 'react-native';
-import React, { useState, useEffect } from 'react';
-import { User, Shift } from '@/types';
+import React, { useEffect } from 'react';
+import { StyleSheet, useColorScheme } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { generateMockShifts } from '@/utils/mockData';
-import { getUser, getShifts, saveShifts, getNotifications } from '@/utils/storage';
+import { useAuth } from '@/hooks/useAuth';
+import { useShifts } from '@/hooks/useShifts';
+import { useNotifications } from '@/hooks/useNotifications';
 import { getCategoryTheme } from '@/styles/categoryThemes';
+import { formatTime, formatDate } from '@/utils/dateHelpers';
+import { getUserFullName } from '@/utils/userHelpers';
 import BreakfastLayout from '@/components/layouts/BreakfastLayout';
 import FrontDeskLayout from '@/components/layouts/FrontDeskLayout';
 import HousekeepingLayout from '@/components/layouts/HousekeepingLayout';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 export default function HomeScreen() {
-  const [user, setUser] = useState<User | null>(null);
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const { user } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  // Get category-specific theme
   const category = user?.category || 'breakfast';
   const theme = getCategoryTheme(category, isDark);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const {
+    shifts,
+    loading: shiftsLoading,
+    getTodayShifts,
+    getUpcomingShifts,
+    loadShifts,
+  } = useShifts(user?.id, category);
 
-  const loadData = async () => {
-    try {
-      const userData = await getUser();
-      console.log('Home screen loaded user:', userData);
-      setUser(userData);
+  const {
+    unreadCount,
+    loading: notificationsLoading,
+    loadNotifications,
+  } = useNotifications();
 
-      let shiftsData = await getShifts();
-      if (!shiftsData || shiftsData.length === 0) {
-        shiftsData = generateMockShifts(userData?.id || '1', userData?.category || 'breakfast');
-        await saveShifts(shiftsData);
-      }
-      setShifts(shiftsData);
-
-      const notifications = await getNotifications();
-      const unread = notifications.filter(n => !n.read).length;
-      setUnreadCount(unread);
-    } catch (error) {
-      console.log('Error loading data:', error);
-    }
-  };
+  const [refreshing, setRefreshing] = React.useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await Promise.all([loadShifts(), loadNotifications()]);
     setRefreshing(false);
   };
 
-  const getTodayShifts = () => {
-    const today = new Date().toISOString().split('T')[0];
-    return shifts.filter(shift => shift.date === today);
-  };
-
-  const getUpcomingShifts = () => {
-    const today = new Date().toISOString().split('T')[0];
-    return shifts
-      .filter(shift => shift.date > today)
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(0, 3);
-  };
-
-  const formatTime = (time: string) => {
-    return time;
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
-    };
-    return date.toLocaleDateString('en-US', options);
-  };
-
-  const getUserName = () => {
-    if (!user) return 'Employee';
-    return `${user.firstName} ${user.lastName}`.trim() || 'Employee';
-  };
-
   const todayShifts = getTodayShifts();
-  const upcomingShifts = getUpcomingShifts();
+  const upcomingShifts = getUpcomingShifts(3);
 
-  // Common props for all layouts
   const layoutProps = {
     user,
     shifts,
@@ -107,10 +57,20 @@ export default function HomeScreen() {
     theme,
     formatTime,
     formatDate,
-    getUserName,
+    getUserName: () => getUserFullName(user),
   };
 
-  // Render category-specific layout
+  if (shiftsLoading || notificationsLoading) {
+    return (
+      <SafeAreaView 
+        style={[styles.container, { backgroundColor: theme.background }]} 
+        edges={['top']}
+      >
+        <LoadingSpinner isDark={isDark} message="Loading your schedule..." />
+      </SafeAreaView>
+    );
+  }
+
   const renderLayout = () => {
     switch (category) {
       case 'breakfast':

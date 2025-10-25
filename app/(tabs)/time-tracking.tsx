@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,280 +11,263 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Location from 'expo-location';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, darkColors, buttonStyles } from '@/styles/commonStyles';
-import { getUser, getTimeEntries, saveTimeEntry, updateTimeEntry } from '@/utils/storage';
-import { TimeEntry, User } from '@/types';
+import { useAuth } from '@/hooks/useAuth';
+import { useTimeTracking } from '@/hooks/useTimeTracking';
+import { formatTime, formatDate } from '@/utils/dateHelpers';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import EmptyState from '@/components/common/EmptyState';
 
 export default function TimeTrackingScreen() {
+  const { user } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const theme = isDark ? darkColors : colors;
 
-  const [user, setUser] = useState<User | null>(null);
-  const [currentEntry, setCurrentEntry] = useState<TimeEntry | null>(null);
-  const [isOnBreak, setIsOnBreak] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [location, setLocation] = useState<Location.LocationObject | null>(null);
-
-  useEffect(() => {
-    loadData();
-    requestLocationPermission();
-
-    // Update time every second
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  const loadData = async () => {
-    const userData = await getUser();
-    setUser(userData);
-
-    const entries = await getTimeEntries();
-    const activeEntry = entries.find(e => !e.clockOut && e.userId === userData?.id);
-    if (activeEntry) {
-      setCurrentEntry(activeEntry);
-      setIsOnBreak(!!activeEntry.breakStart && !activeEntry.breakEnd);
-    }
-  };
-
-  const requestLocationPermission = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Location permission is required for time tracking'
-        );
-        return;
-      }
-
-      const loc = await Location.getCurrentPositionAsync({});
-      setLocation(loc);
-      console.log('Location obtained:', loc.coords);
-    } catch (error) {
-      console.error('Error getting location:', error);
-    }
-  };
+  const {
+    timeEntries,
+    currentEntry,
+    loading,
+    locationPermission,
+    clockIn,
+    clockOut,
+    startBreak,
+    endBreak,
+  } = useTimeTracking(user?.id || '');
 
   const handleClockIn = async () => {
-    if (!location) {
-      Alert.alert('Error', 'Unable to get your location. Please try again.');
+    if (!locationPermission) {
+      Alert.alert(
+        'Location Permission Required',
+        'Please enable location services to clock in.',
+        [{ text: 'OK' }]
+      );
       return;
     }
 
-    const newEntry: TimeEntry = {
-      id: Date.now().toString(),
-      userId: user?.id || '',
-      shiftId: 'shift-today',
-      clockIn: new Date().toISOString(),
-      location: {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      },
-    };
-
-    await saveTimeEntry(newEntry);
-    setCurrentEntry(newEntry);
-    console.log('Clocked in:', newEntry);
-    Alert.alert('Success', 'You have clocked in successfully!');
+    try {
+      await clockIn('current-shift-id');
+      Alert.alert('Success', 'Clocked in successfully!');
+    } catch (error) {
+      console.error('Clock in error:', error);
+      Alert.alert('Error', 'Failed to clock in. Please try again.');
+    }
   };
 
   const handleClockOut = async () => {
-    if (!currentEntry) {
-      console.log('No active entry to clock out');
-      return;
-    }
-
-    const clockOutTime = new Date();
-    const clockInTime = new Date(currentEntry.clockIn);
-    const totalHours = (clockOutTime.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
-
-    await updateTimeEntry(currentEntry.id, {
-      clockOut: clockOutTime.toISOString(),
-      totalHours: parseFloat(totalHours.toFixed(2)),
-    });
-
-    console.log('Clocked out:', { totalHours });
     Alert.alert(
-      'Clocked Out',
-      `Total hours worked: ${totalHours.toFixed(2)} hours`,
-      [{ text: 'OK', onPress: () => setCurrentEntry(null) }]
+      'Clock Out',
+      'Are you sure you want to clock out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clock Out',
+          onPress: async () => {
+            try {
+              await clockOut();
+              Alert.alert('Success', 'Clocked out successfully!');
+            } catch (error) {
+              console.error('Clock out error:', error);
+              Alert.alert('Error', 'Failed to clock out. Please try again.');
+            }
+          },
+        },
+      ]
     );
   };
 
   const handleBreakStart = async () => {
-    if (!currentEntry) {
-      console.log('No active entry for break');
-      return;
+    try {
+      await startBreak();
+      Alert.alert('Success', 'Break started');
+    } catch (error) {
+      console.error('Break start error:', error);
+      Alert.alert('Error', 'Failed to start break. Please try again.');
     }
-
-    await updateTimeEntry(currentEntry.id, {
-      breakStart: new Date().toISOString(),
-    });
-
-    setIsOnBreak(true);
-    console.log('Break started');
-    Alert.alert('Break Started', 'Enjoy your break!');
   };
 
   const handleBreakEnd = async () => {
-    if (!currentEntry) {
-      console.log('No active entry for break end');
-      return;
+    try {
+      await endBreak();
+      Alert.alert('Success', 'Break ended');
+    } catch (error) {
+      console.error('Break end error:', error);
+      Alert.alert('Error', 'Failed to end break. Please try again.');
     }
-
-    await updateTimeEntry(currentEntry.id, {
-      breakEnd: new Date().toISOString(),
-    });
-
-    setIsOnBreak(false);
-    console.log('Break ended');
-    Alert.alert('Break Ended', 'Welcome back!');
   };
 
   const getElapsedTime = () => {
-    if (!currentEntry) {
-      return '00:00:00';
-    }
+    if (!currentEntry) return '00:00:00';
 
     const start = new Date(currentEntry.clockIn);
-    const diff = currentTime.getTime() - start.getTime();
+    const now = new Date();
+    const diff = now.getTime() - start.getTime();
+
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    return `${hours.toString().padStart(2, '0')}:${minutes
+      .toString()
+      .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <LoadingSpinner isDark={isDark} message="Loading time entries..." />
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Current Time */}
-        <View style={[styles.timeCard, { backgroundColor: theme.card }]}>
-          <Text style={[styles.currentTimeLabel, { color: theme.textSecondary }]}>
-            Current Time
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <ScrollView style={styles.scrollView}>
+        {/* Current Status */}
+        <View style={[styles.statusCard, { backgroundColor: theme.card }]}>
+          <Text style={[styles.statusTitle, { color: theme.text }]}>
+            Current Status
           </Text>
-          <Text style={[styles.currentTime, { color: theme.text }]}>
-            {formatTime(currentTime)}
-          </Text>
-          <Text style={[styles.currentDate, { color: theme.textSecondary }]}>
-            {currentTime.toLocaleDateString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </Text>
-        </View>
-
-        {/* Status Card */}
-        {currentEntry ? (
-          <View style={[styles.statusCard, { backgroundColor: theme.success }]}>
-            <View style={styles.statusHeader}>
-              <IconSymbol name="checkmark.circle.fill" size={32} color={theme.card} />
-              <Text style={[styles.statusTitle, { color: theme.card }]}>
-                {isOnBreak ? 'On Break' : 'Clocked In'}
+          
+          {currentEntry ? (
+            <>
+              <View style={[styles.statusBadge, { backgroundColor: '#4CAF50' }]}>
+                <View style={styles.statusDot} />
+                <Text style={styles.statusText}>Clocked In</Text>
+              </View>
+              
+              <Text style={[styles.elapsedTime, { color: theme.text }]}>
+                {getElapsedTime()}
               </Text>
-            </View>
-            <Text style={[styles.elapsedTime, { color: theme.card }]}>
-              {getElapsedTime()}
-            </Text>
-            <Text style={[styles.statusSubtitle, { color: theme.card }]}>
-              Since {new Date(currentEntry.clockIn).toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.statusCard, { backgroundColor: theme.card, borderWidth: 2, borderColor: theme.border }]}>
-            <IconSymbol name="clock" size={48} color={theme.textSecondary} />
-            <Text style={[styles.notClockedText, { color: theme.textSecondary }]}>
-              Not Clocked In
-            </Text>
-          </View>
-        )}
+              
+              <Text style={[styles.clockInTime, { color: theme.textSecondary }]}>
+                Clocked in at {new Date(currentEntry.clockIn).toLocaleTimeString()}
+              </Text>
+
+              {currentEntry.location && (
+                <View style={styles.locationInfo}>
+                  <IconSymbol name="location" size={16} color={theme.textSecondary} />
+                  <Text style={[styles.locationText, { color: theme.textSecondary }]}>
+                    Location tracked
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <>
+              <View style={[styles.statusBadge, { backgroundColor: theme.textSecondary }]}>
+                <Text style={styles.statusText}>Not Clocked In</Text>
+              </View>
+              <Text style={[styles.statusMessage, { color: theme.textSecondary }]}>
+                Clock in to start tracking your time
+              </Text>
+            </>
+          )}
+        </View>
 
         {/* Action Buttons */}
         <View style={styles.actions}>
           {!currentEntry ? (
             <TouchableOpacity
-              style={[buttonStyles.primary, styles.mainButton, { backgroundColor: theme.primary }]}
+              style={[buttonStyles.primary, { backgroundColor: theme.primary }]}
               onPress={handleClockIn}
             >
-              <IconSymbol name="play.circle.fill" size={24} color={theme.card} />
-              <Text style={[styles.buttonText, { color: theme.card }]}>Clock In</Text>
+              <IconSymbol name="clock" size={20} color="#FFFFFF" />
+              <Text style={buttonStyles.primaryText}>Clock In</Text>
             </TouchableOpacity>
           ) : (
             <>
-              {!isOnBreak ? (
-                <>
-                  <TouchableOpacity
-                    style={[buttonStyles.secondary, styles.actionButton, { backgroundColor: theme.warning }]}
-                    onPress={handleBreakStart}
-                  >
-                    <IconSymbol name="pause.circle.fill" size={24} color={theme.text} />
-                    <Text style={[styles.buttonText, { color: theme.text }]}>Start Break</Text>
-                  </TouchableOpacity>
+              <TouchableOpacity
+                style={[buttonStyles.primary, { backgroundColor: '#FF6B6B' }]}
+                onPress={handleClockOut}
+              >
+                <IconSymbol name="clock" size={20} color="#FFFFFF" />
+                <Text style={buttonStyles.primaryText}>Clock Out</Text>
+              </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[buttonStyles.primary, styles.actionButton, { backgroundColor: theme.error }]}
-                    onPress={handleClockOut}
-                  >
-                    <IconSymbol name="stop.circle.fill" size={24} color={theme.card} />
-                    <Text style={[styles.buttonText, { color: theme.card }]}>Clock Out</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
+              {!currentEntry.breakStart ? (
                 <TouchableOpacity
-                  style={[buttonStyles.primary, styles.mainButton, { backgroundColor: theme.success }]}
+                  style={[buttonStyles.secondary, { borderColor: theme.primary }]}
+                  onPress={handleBreakStart}
+                >
+                  <IconSymbol name="pause.circle" size={20} color={theme.primary} />
+                  <Text style={[buttonStyles.secondaryText, { color: theme.primary }]}>
+                    Start Break
+                  </Text>
+                </TouchableOpacity>
+              ) : !currentEntry.breakEnd ? (
+                <TouchableOpacity
+                  style={[buttonStyles.secondary, { borderColor: theme.primary }]}
                   onPress={handleBreakEnd}
                 >
-                  <IconSymbol name="play.circle.fill" size={24} color={theme.card} />
-                  <Text style={[styles.buttonText, { color: theme.card }]}>End Break</Text>
+                  <IconSymbol name="play.circle" size={20} color={theme.primary} />
+                  <Text style={[buttonStyles.secondaryText, { color: theme.primary }]}>
+                    End Break
+                  </Text>
                 </TouchableOpacity>
-              )}
+              ) : null}
             </>
           )}
         </View>
 
-        {/* Location Info */}
-        {location && (
-          <View style={[styles.infoCard, { backgroundColor: theme.card }]}>
-            <View style={styles.infoRow}>
-              <IconSymbol name="location.fill" size={20} color={theme.primary} />
-              <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
-                Location Tracking Active
-              </Text>
-            </View>
-            <Text style={[styles.infoText, { color: theme.text }]}>
-              Lat: {location.coords.latitude.toFixed(6)}
-            </Text>
-            <Text style={[styles.infoText, { color: theme.text }]}>
-              Lon: {location.coords.longitude.toFixed(6)}
-            </Text>
-          </View>
-        )}
-
-        {/* Info Box */}
-        <View style={[styles.infoBox, { backgroundColor: theme.highlight }]}>
-          <IconSymbol name="info.circle" size={20} color={theme.primary} />
-          <Text style={[styles.infoBoxText, { color: theme.text }]}>
-            Your location is tracked for time entries to ensure accurate attendance records.
+        {/* Recent Entries */}
+        <View style={[styles.section, { backgroundColor: theme.card }]}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Recent Time Entries
           </Text>
+
+          {timeEntries.length === 0 ? (
+            <EmptyState
+              icon="clock"
+              title="No Time Entries"
+              message="Your time tracking history will appear here"
+              isDark={isDark}
+            />
+          ) : (
+            timeEntries.slice(0, 10).map((entry) => (
+              <View
+                key={entry.id}
+                style={[styles.entryCard, { borderColor: theme.border }]}
+              >
+                <View style={styles.entryHeader}>
+                  <Text style={[styles.entryDate, { color: theme.text }]}>
+                    {formatDate(entry.clockIn)}
+                  </Text>
+                  {entry.totalHours && (
+                    <Text style={[styles.entryHours, { color: theme.primary }]}>
+                      {entry.totalHours}h
+                    </Text>
+                  )}
+                </View>
+                
+                <View style={styles.entryTimes}>
+                  <View style={styles.entryTime}>
+                    <IconSymbol name="arrow.right.circle" size={16} color="#4CAF50" />
+                    <Text style={[styles.entryTimeText, { color: theme.textSecondary }]}>
+                      In: {new Date(entry.clockIn).toLocaleTimeString()}
+                    </Text>
+                  </View>
+                  
+                  {entry.clockOut && (
+                    <View style={styles.entryTime}>
+                      <IconSymbol name="arrow.left.circle" size={16} color="#FF6B6B" />
+                      <Text style={[styles.entryTimeText, { color: theme.textSecondary }]}>
+                        Out: {new Date(entry.clockOut).toLocaleTimeString()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {entry.breakStart && entry.breakEnd && (
+                  <Text style={[styles.breakInfo, { color: theme.textSecondary }]}>
+                    Break: {new Date(entry.breakStart).toLocaleTimeString()} -{' '}
+                    {new Date(entry.breakEnd).toLocaleTimeString()}
+                  </Text>
+                )}
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -295,115 +278,110 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 100,
-  },
-  timeCard: {
-    padding: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 20,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
-  },
-  currentTimeLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  currentTime: {
-    fontSize: 48,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  currentDate: {
-    fontSize: 16,
+  scrollView: {
+    flex: 1,
   },
   statusCard: {
-    padding: 32,
-    borderRadius: 12,
+    margin: 16,
+    padding: 24,
+    borderRadius: 16,
     alignItems: 'center',
-    marginBottom: 24,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
-  },
-  statusHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
   },
   statusTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  elapsedTime: {
-    fontSize: 56,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  statusSubtitle: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  notClockedText: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginTop: 16,
-  },
-  actions: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  mainButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingVertical: 18,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingVertical: 16,
-  },
-  buttonText: {
     fontSize: 18,
     fontWeight: '600',
+    marginBottom: 16,
   },
-  infoCard: {
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 16,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+    marginRight: 8,
+  },
+  statusText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  elapsedTime: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  clockInTime: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  statusMessage: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  locationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  locationText: {
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  actions: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  section: {
+    margin: 16,
     padding: 16,
     borderRadius: 12,
-    marginBottom: 16,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
-    elevation: 2,
   },
-  infoRow: {
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  entryCard: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  entryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  entryDate: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  entryHours: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  entryTimes: {
+    gap: 4,
+  },
+  entryTime: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
   },
-  infoLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  infoText: {
+  entryTimeText: {
     fontSize: 12,
-    marginBottom: 4,
   },
-  infoBox: {
-    flexDirection: 'row',
-    padding: 16,
-    borderRadius: 8,
-    gap: 12,
-  },
-  infoBoxText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
+  breakInfo: {
+    fontSize: 12,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 });
