@@ -41,43 +41,7 @@ export default function AdminScreen() {
   const isDark = colorScheme === 'dark';
   const currentColors = isDark ? darkColors : colors;
 
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const currentUser = await getUser();
-      setUser(currentUser);
-
-      if (currentUser?.role === 'admin') {
-        // Load employees from Supabase
-        await loadEmployees();
-        
-        // Load shift requests
-        const allRequests = await getShiftRequests();
-        const filteredRequests = currentUser.category
-          ? allRequests.filter(r => r.category === currentUser.category)
-          : allRequests;
-        setRequests(filteredRequests);
-
-        // Load shifts
-        const allShifts = await getShifts();
-        const filteredShifts = currentUser.category
-          ? allShifts.filter(s => s.category === currentUser.category)
-          : allShifts;
-        setShifts(filteredShifts);
-      }
-    } catch (error) {
-      console.error('Error loading admin data:', error);
-      Alert.alert('Error', 'Failed to load data');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  const loadEmployees = async () => {
+  const loadEmployees = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('employees')
@@ -109,7 +73,43 @@ export default function AdminScreen() {
     } catch (error) {
       console.error('Error loading employees:', error);
     }
-  };
+  }, []);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const currentUser = await getUser();
+      setUser(currentUser);
+
+      if (currentUser?.role === 'admin') {
+        // Load employees from Supabase
+        await loadEmployees();
+        
+        // Load shift requests
+        const allRequests = await getShiftRequests();
+        const filteredRequests = currentUser.category
+          ? allRequests.filter(r => r.category === currentUser.category)
+          : allRequests;
+        setRequests(filteredRequests);
+
+        // Load shifts
+        const allShifts = await getShifts();
+        const filteredShifts = currentUser.category
+          ? allShifts.filter(s => s.category === currentUser.category)
+          : allShifts;
+        setShifts(filteredShifts);
+      }
+    } catch (error) {
+      console.error('Error loading admin data:', error);
+      Alert.alert('Error', 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }, [loadEmployees]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleApprove = async (request: ShiftRequest) => {
     try {
