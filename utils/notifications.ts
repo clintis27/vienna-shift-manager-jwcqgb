@@ -41,12 +41,20 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
       return;
     }
     
-    token = (await Notifications.getExpoPushTokenAsync({
-      projectId: 'your-project-id', // Replace with your actual project ID
-    })).data;
-    
-    console.log('Push token:', token);
-    await savePushToken(token);
+    try {
+      // Get project ID from app.json or use a fallback
+      const projectId = process.env.EXPO_PUBLIC_PROJECT_ID || 'hotel-house-vienna';
+      
+      token = (await Notifications.getExpoPushTokenAsync({
+        projectId: projectId,
+      })).data;
+      
+      console.log('Push token:', token);
+      await savePushToken(token);
+    } catch (error) {
+      console.error('Error getting push token:', error);
+      console.log('Push notifications will work in development mode without a token');
+    }
   } else {
     console.log('Must use physical device for Push Notifications');
   }
@@ -83,15 +91,19 @@ export async function sendLocalNotification(
   body: string,
   data?: any
 ): Promise<void> {
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title,
-      body,
-      data,
-      sound: true,
-    },
-    trigger: null, // Send immediately
-  });
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data,
+        sound: true,
+      },
+      trigger: null, // Send immediately
+    });
+  } catch (error) {
+    console.error('Error sending local notification:', error);
+  }
 }
 
 // Send notification for shift change
@@ -101,36 +113,40 @@ export async function notifyShiftChange(
   changeType: 'new' | 'updated' | 'cancelled' | 'swapped',
   shiftDetails: string
 ): Promise<void> {
-  const user = await getUser();
-  if (!user || !user.notificationPreferences?.shiftChanges) {
-    console.log('Shift change notifications disabled for user');
-    return;
-  }
+  try {
+    const user = await getUser();
+    if (!user || !user.notificationPreferences?.shiftChanges) {
+      console.log('Shift change notifications disabled for user');
+      return;
+    }
 
-  const titles = {
-    new: 'New Shift Assigned',
-    updated: 'Shift Updated',
-    cancelled: 'Shift Cancelled',
-    swapped: 'Shift Swapped',
-  };
+    const titles = {
+      new: 'New Shift Assigned',
+      updated: 'Shift Updated',
+      cancelled: 'Shift Cancelled',
+      swapped: 'Shift Swapped',
+    };
 
-  const messages = {
-    new: `You have been assigned a new shift: ${shiftDetails}`,
-    updated: `Your shift has been updated: ${shiftDetails}`,
-    cancelled: `Your shift has been cancelled: ${shiftDetails}`,
-    swapped: `Your shift has been swapped: ${shiftDetails}`,
-  };
+    const messages = {
+      new: `You have been assigned a new shift: ${shiftDetails}`,
+      updated: `Your shift has been updated: ${shiftDetails}`,
+      cancelled: `Your shift has been cancelled: ${shiftDetails}`,
+      swapped: `Your shift has been swapped: ${shiftDetails}`,
+    };
 
-  await createNotification(
-    userId,
-    titles[changeType],
-    messages[changeType],
-    'shift_change',
-    { changeType, shiftDetails }
-  );
+    await createNotification(
+      userId,
+      titles[changeType],
+      messages[changeType],
+      'shift_change',
+      { changeType, shiftDetails }
+    );
 
-  if (user.notificationPreferences?.pushEnabled) {
-    await sendLocalNotification(titles[changeType], messages[changeType]);
+    if (user.notificationPreferences?.pushEnabled) {
+      await sendLocalNotification(titles[changeType], messages[changeType]);
+    }
+  } catch (error) {
+    console.error('Error sending shift change notification:', error);
   }
 }
 
@@ -141,28 +157,32 @@ export async function notifyApproval(
   status: 'approved' | 'rejected',
   details: string
 ): Promise<void> {
-  const user = await getUser();
-  if (!user || !user.notificationPreferences?.approvals) {
-    console.log('Approval notifications disabled for user');
-    return;
-  }
+  try {
+    const user = await getUser();
+    if (!user || !user.notificationPreferences?.approvals) {
+      console.log('Approval notifications disabled for user');
+      return;
+    }
 
-  const title = status === 'approved' 
-    ? `${requestType === 'shift' ? 'Shift' : 'Leave'} Request Approved`
-    : `${requestType === 'shift' ? 'Shift' : 'Leave'} Request Rejected`;
+    const title = status === 'approved' 
+      ? `${requestType === 'shift' ? 'Shift' : 'Leave'} Request Approved`
+      : `${requestType === 'shift' ? 'Shift' : 'Leave'} Request Rejected`;
 
-  const message = `Your ${requestType} request has been ${status}: ${details}`;
+    const message = `Your ${requestType} request has been ${status}: ${details}`;
 
-  await createNotification(
-    userId,
-    title,
-    message,
-    'approval',
-    { requestType, status, details }
-  );
+    await createNotification(
+      userId,
+      title,
+      message,
+      'approval',
+      { requestType, status, details }
+    );
 
-  if (user.notificationPreferences?.pushEnabled) {
-    await sendLocalNotification(title, message);
+    if (user.notificationPreferences?.pushEnabled) {
+      await sendLocalNotification(title, message);
+    }
+  } catch (error) {
+    console.error('Error sending approval notification:', error);
   }
 }
 
@@ -172,27 +192,31 @@ export async function notifyReminder(
   reminderType: 'shift_starting' | 'shift_ending' | 'break_time',
   details: string
 ): Promise<void> {
-  const user = await getUser();
-  if (!user || !user.notificationPreferences?.reminders) {
-    console.log('Reminder notifications disabled for user');
-    return;
-  }
+  try {
+    const user = await getUser();
+    if (!user || !user.notificationPreferences?.reminders) {
+      console.log('Reminder notifications disabled for user');
+      return;
+    }
 
-  const titles = {
-    shift_starting: 'Shift Starting Soon',
-    shift_ending: 'Shift Ending Soon',
-    break_time: 'Break Time',
-  };
+    const titles = {
+      shift_starting: 'Shift Starting Soon',
+      shift_ending: 'Shift Ending Soon',
+      break_time: 'Break Time',
+    };
 
-  await createNotification(
-    userId,
-    titles[reminderType],
-    details,
-    'reminder',
-    { reminderType, details }
-  );
+    await createNotification(
+      userId,
+      titles[reminderType],
+      details,
+      'reminder',
+      { reminderType, details }
+    );
 
-  if (user.notificationPreferences?.pushEnabled) {
-    await sendLocalNotification(titles[reminderType], details);
+    if (user.notificationPreferences?.pushEnabled) {
+      await sendLocalNotification(titles[reminderType], details);
+    }
+  } catch (error) {
+    console.error('Error sending reminder notification:', error);
   }
 }
