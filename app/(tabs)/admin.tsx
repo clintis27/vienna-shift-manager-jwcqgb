@@ -16,7 +16,7 @@ import { getCategoryColor, getCategoryName } from '@/utils/mockData';
 import { notifyApproval, notifyShiftChange } from '@/utils/notifications';
 import { colors, darkColors, buttonStyles } from '@/styles/commonStyles';
 import { Calendar, DateData } from 'react-native-calendars';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getUser, getShiftRequests, updateShiftRequest, saveShifts, getShifts } from '@/utils/storage';
 import { IconSymbol } from '@/components/IconSymbol';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,11 +41,7 @@ export default function AdminScreen() {
   const isDark = colorScheme === 'dark';
   const currentColors = isDark ? darkColors : colors;
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const currentUser = await getUser();
@@ -75,7 +71,11 @@ export default function AdminScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const loadEmployees = async () => {
     try {
