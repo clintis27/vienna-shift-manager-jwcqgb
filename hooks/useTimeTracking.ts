@@ -10,16 +10,37 @@ export function useTimeTracking(userId: string) {
   const [loading, setLoading] = useState(true);
   const [locationPermission, setLocationPermission] = useState(false);
 
-  const requestLocationPermission = useCallback(async () => {
+  useEffect(() => {
+    loadTimeEntries();
+    requestLocationPermission();
+  }, []);
+
+  const loadTimeEntries = async () => {
+    try {
+      setLoading(true);
+      const entries = await getTimeEntries();
+      const userEntries = entries.filter(e => e.userId === userId);
+      setTimeEntries(userEntries);
+      
+      const active = userEntries.find(e => !e.clockOut);
+      setCurrentEntry(active || null);
+    } catch (error) {
+      console.error('Error loading time entries:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const requestLocationPermission = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       setLocationPermission(status === 'granted');
     } catch (error) {
       console.error('Error requesting location permission:', error);
     }
-  }, []);
+  };
 
-  const getCurrentLocation = useCallback(async () => {
+  const getCurrentLocation = async () => {
     if (!locationPermission) return undefined;
 
     try {
@@ -35,28 +56,7 @@ export function useTimeTracking(userId: string) {
       console.error('Error getting location:', error);
       return undefined;
     }
-  }, [locationPermission]);
-
-  const loadTimeEntries = useCallback(async () => {
-    try {
-      setLoading(true);
-      const entries = await getTimeEntries();
-      const userEntries = entries.filter(e => e.userId === userId);
-      setTimeEntries(userEntries);
-      
-      const active = userEntries.find(e => !e.clockOut);
-      setCurrentEntry(active || null);
-    } catch (error) {
-      console.error('Error loading time entries:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    loadTimeEntries();
-    requestLocationPermission();
-  }, [loadTimeEntries, requestLocationPermission]);
+  };
 
   const clockIn = useCallback(async (shiftId: string) => {
     try {
@@ -76,7 +76,7 @@ export function useTimeTracking(userId: string) {
       console.error('Error clocking in:', error);
       throw error;
     }
-  }, [userId, getCurrentLocation, loadTimeEntries]);
+  }, [userId, locationPermission]);
 
   const clockOut = useCallback(async () => {
     if (!currentEntry) return;
@@ -97,7 +97,7 @@ export function useTimeTracking(userId: string) {
       console.error('Error clocking out:', error);
       throw error;
     }
-  }, [currentEntry, loadTimeEntries]);
+  }, [currentEntry]);
 
   const startBreak = useCallback(async () => {
     if (!currentEntry) return;
@@ -111,7 +111,7 @@ export function useTimeTracking(userId: string) {
       console.error('Error starting break:', error);
       throw error;
     }
-  }, [currentEntry, loadTimeEntries]);
+  }, [currentEntry]);
 
   const endBreak = useCallback(async () => {
     if (!currentEntry) return;
@@ -125,7 +125,7 @@ export function useTimeTracking(userId: string) {
       console.error('Error ending break:', error);
       throw error;
     }
-  }, [currentEntry, loadTimeEntries]);
+  }, [currentEntry]);
 
   return {
     timeEntries,
