@@ -1,3 +1,4 @@
+
 {
   "cli": {
     "version": ">= 5.0.0"
@@ -16,19 +17,23 @@
     "preview": {
       "distribution": "internal",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "resourceClass": "m-medium"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
       }
     },
     "production": {
       "ios": {
         "simulator": false,
-        "bundleIdentifier": "com.hotelhousevienna.shiftmanager"
+        "bundleIdentifier": "com.hotelhousevienna.shiftmanager",
+        "resourceClass": "m-medium"
       },
       "android": {
-        "buildType": "apk",
+        "buildType": "aab",
+        "gradleCommand": ":app:bundleRelease",
         "package": "com.hotelhousevienna.shiftmanager"
       }
     }
@@ -41,7 +46,7 @@
         "appleTeamId": "your-apple-team-id"
       },
       "android": {
-        "serviceAccountKeyPath": "./path-to-service-account-key.json",
+        "serviceAccountKeyPath": "./google-play-service-account.json",
         "track": "production"
       }
     }

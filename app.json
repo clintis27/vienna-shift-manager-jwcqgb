@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.hotelhousevienna.shiftmanager",
-      "buildNumber": "1.0.0",
+      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "This app needs access to your location for GPS-based time tracking.",
@@ -70,6 +70,14 @@
         {
           "faceIDPermission": "Allow Hotel House of Vienna to use Face ID for secure authentication."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/natively-dark.png",
+          "color": "#B8C5B8",
+          "sounds": []
+        }
       ]
     ],
     "scheme": "hotelhousevienna",
@@ -77,9 +85,11 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
+      "router": {
+        "origin": false
+      },
       "eas": {
-        "projectId": "your-eas-project-id"
+        "projectId": "your-eas-project-id-here"
       }
     }
   }
