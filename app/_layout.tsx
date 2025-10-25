@@ -2,11 +2,11 @@
 import 'react-native-reanimated';
 import React, { useEffect, useState } from 'react';
 import { useFonts } from 'expo-font';
-import { Stack, router } from 'expo-router';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useColorScheme, Alert, ActivityIndicator, View, Text, StyleSheet } from 'react-native';
+import { useColorScheme, Alert, ActivityIndicator, View, StyleSheet } from 'react-native';
 import { useNetworkState } from 'expo-network';
 import {
   DarkTheme,
@@ -16,12 +16,13 @@ import {
 } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { WidgetProvider } from '@/contexts/WidgetContext';
-import { isAuthenticated } from '@/utils/storage';
+import { supabase } from '@/app/integrations/supabase/client';
 
+// Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
-  initialRouteName: '(auth)',
+  initialRouteName: 'index',
 };
 
 export default function RootLayout() {
@@ -30,51 +31,58 @@ export default function RootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
-  const [isReady, setIsReady] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
+  const [appReady, setAppReady] = useState(false);
 
   useEffect(() => {
     const initializeApp = async () => {
-      if (!loaded) {
-        return;
-      }
-
       try {
         console.log('=== App Initialization Started ===');
         
-        // Check authentication status
-        const isAuth = await isAuthenticated();
-        console.log('Authentication status:', isAuth);
-        
-        setAuthChecked(true);
-        
+        // Wait for fonts to load
+        if (!loaded) {
+          console.log('Waiting for fonts to load...');
+          return;
+        }
+
+        console.log('Fonts loaded successfully');
+
+        // Check Supabase session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error getting session:', error);
+        } else {
+          console.log('Session check complete:', session ? 'User logged in' : 'No session');
+        }
+
+        // Small delay to ensure everything is ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+
         // Hide splash screen
         await SplashScreen.hideAsync();
         console.log('Splash screen hidden');
-        
-        // Set ready state
-        setIsReady(true);
-        
+
+        // Mark app as ready
+        setAppReady(true);
         console.log('=== App Initialization Complete ===');
       } catch (error) {
-        console.error('Error initializing app:', error);
-        // Ensure we still hide splash and set ready even on error
-        setAuthChecked(true);
-        setIsReady(true);
+        console.error('Error during app initialization:', error);
+        // Even on error, try to hide splash and mark as ready
         try {
           await SplashScreen.hideAsync();
         } catch (e) {
           console.error('Error hiding splash screen:', e);
         }
+        setAppReady(true);
       }
     };
 
     initializeApp();
   }, [loaded]);
 
-  React.useEffect(() => {
+  // Network status monitoring
+  useEffect(() => {
     if (
-      !networkState.isConnected &&
+      networkState.isConnected === false &&
       networkState.isInternetReachable === false
     ) {
       Alert.alert(
@@ -84,11 +92,11 @@ export default function RootLayout() {
     }
   }, [networkState.isConnected, networkState.isInternetReachable]);
 
-  if (!loaded || !isReady || !authChecked) {
+  // Show loading screen while initializing
+  if (!loaded || !appReady) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#B8C5B8" />
-        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
@@ -145,10 +153,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FAFAFA',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#2D2D2D',
   },
 });

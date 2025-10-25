@@ -1,9 +1,6 @@
 
-import { IconSymbol } from '@/components/IconSymbol';
-import { router } from 'expo-router';
+import { saveUser, setAuthenticated } from '@/utils/storage';
 import { colors, darkColors, commonStyles, buttonStyles } from '@/styles/commonStyles';
-import { validateLogin } from '@/utils/mockData';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -15,17 +12,23 @@ import {
   Platform,
   ScrollView,
   useColorScheme,
+  ActivityIndicator,
 } from 'react-native';
-import * as LocalAuthentication from 'expo-local-authentication';
-import { saveUser, setAuthenticated } from '@/utils/storage';
+import { router } from 'expo-router';
 import React, { useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { validateLogin } from '@/utils/mockData';
+import * as LocalAuthentication from 'expo-local-authentication';
+import { IconSymbol } from '@/components/IconSymbol';
+import { supabase } from '@/app/integrations/supabase/client';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const colorScheme = useColorScheme();
-  const currentColors = colorScheme === 'dark' ? darkColors : colors;
+  const isDark = colorScheme === 'dark';
+  const theme = isDark ? darkColors : colors;
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -34,37 +37,47 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
+    console.log('Login: Attempting login for:', email);
+
     try {
-      console.log('=== Login Started ===');
-      console.log('Email:', email);
-      
-      const user = await validateLogin(email, password);
-      
-      if (user) {
-        console.log('User validated:', user.email, 'Category:', user.category);
+      // Try Supabase authentication first
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password,
+      });
+
+      if (error) {
+        console.error('Login: Supabase auth error:', error);
         
-        // Save user data
-        await saveUser(user);
-        console.log('User data saved');
+        // If Supabase auth fails, try mock data for demo purposes
+        console.log('Login: Trying mock authentication...');
+        const user = validateLogin(email, password);
         
-        // Set authentication status
+        if (user) {
+          console.log('Login: Mock authentication successful');
+          await saveUser(user);
+          await setAuthenticated(true);
+          Alert.alert('Success', 'Logged in successfully (Demo Mode)');
+          router.replace('/(tabs)/(home)');
+        } else {
+          Alert.alert('Error', error.message || 'Invalid email or password');
+        }
+      } else if (data.session) {
+        console.log('Login: Supabase authentication successful');
+        
+        // Try to get user from mock data to populate profile
+        const mockUser = validateLogin(email, password);
+        if (mockUser) {
+          await saveUser(mockUser);
+        }
+        
         await setAuthenticated(true);
-        console.log('Authentication status set to true');
-        
-        // Small delay to ensure state is saved
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Navigate to home
-        console.log('Navigating to home...');
+        Alert.alert('Success', 'Logged in successfully');
         router.replace('/(tabs)/(home)');
-        console.log('=== Login Complete ===');
-      } else {
-        console.log('Login failed: Invalid credentials');
-        Alert.alert('Error', 'Invalid email or password');
       }
     } catch (error) {
-      console.error('Login error:', error);
-      Alert.alert('Error', 'An error occurred during login. Please try again.');
+      console.error('Login: Unexpected error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -73,14 +86,13 @@ export default function LoginScreen() {
   const handleBiometricLogin = async () => {
     try {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      if (!hasHardware) {
-        Alert.alert('Error', 'Biometric authentication is not available on this device');
-        return;
-      }
-
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-      if (!isEnrolled) {
-        Alert.alert('Error', 'No biometric data enrolled on this device');
+
+      if (!hasHardware || !isEnrolled) {
+        Alert.alert(
+          'Biometric Not Available',
+          'Biometric authentication is not available on this device or not set up.'
+        );
         return;
       }
 
@@ -90,11 +102,12 @@ export default function LoginScreen() {
       });
 
       if (result.success) {
-        // Use default admin credentials for biometric login
-        await quickLogin('admin@hotel.com', 'admin123');
+        console.log('Login: Biometric authentication successful');
+        // For demo, use a default account
+        await quickLogin('employee@hotel.com', 'password123');
       }
     } catch (error) {
-      console.error('Biometric login error:', error);
+      console.error('Login: Biometric error:', error);
       Alert.alert('Error', 'Biometric authentication failed');
     }
   };
@@ -103,228 +116,157 @@ export default function LoginScreen() {
     setEmail(demoEmail);
     setPassword(demoPassword);
     setLoading(true);
+
     try {
-      console.log('=== Quick Login Started ===');
-      console.log('Email:', demoEmail);
+      console.log('Login: Quick login for:', demoEmail);
       
-      const user = await validateLogin(demoEmail, demoPassword);
-      
-      if (user) {
-        console.log('User validated:', user.email, 'Category:', user.category);
-        
-        await saveUser(user);
-        console.log('User data saved');
-        
+      // Try Supabase first
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: demoEmail,
+        password: demoPassword,
+      });
+
+      if (error) {
+        console.log('Login: Supabase quick login failed, using mock data');
+        // Fall back to mock data
+        const user = validateLogin(demoEmail, demoPassword);
+        if (user) {
+          await saveUser(user);
+          await setAuthenticated(true);
+          router.replace('/(tabs)/(home)');
+        } else {
+          Alert.alert('Error', 'Demo account not found');
+        }
+      } else if (data.session) {
+        console.log('Login: Supabase quick login successful');
+        const mockUser = validateLogin(demoEmail, demoPassword);
+        if (mockUser) {
+          await saveUser(mockUser);
+        }
         await setAuthenticated(true);
-        console.log('Authentication status set to true');
-        
-        // Small delay to ensure state is saved
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        console.log('Navigating to home...');
         router.replace('/(tabs)/(home)');
-        console.log('=== Quick Login Complete ===');
-      } else {
-        Alert.alert('Error', 'Login failed');
       }
     } catch (error) {
-      console.error('Quick login error:', error);
-      Alert.alert('Error', 'An error occurred during login. Please try again.');
+      console.error('Login: Quick login error:', error);
+      Alert.alert('Error', 'Quick login failed');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: currentColors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
           <View style={styles.header}>
-            <View style={[styles.logoContainer, { backgroundColor: currentColors.sage }]}>
-              <IconSymbol name="building.2.fill" size={40} color={currentColors.text} />
-            </View>
-            <Text style={[styles.title, { color: currentColors.text }]}>
-              Welcome back
+            <IconSymbol name="building.2.fill" size={60} color={theme.primary} />
+            <Text style={[styles.title, { color: theme.text }]}>
+              Hotel House of Vienna
             </Text>
-            <Text style={[styles.subtitle, { color: currentColors.textSecondary }]}>
-              Sign in to continue to Hotel House of Vienna
+            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+              Shift Manager
             </Text>
           </View>
 
-          {/* Login Form */}
           <View style={styles.form}>
             <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: currentColors.text }]}>Email</Text>
+              <IconSymbol name="envelope.fill" size={20} color={theme.textSecondary} />
               <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: currentColors.card,
-                    color: currentColors.text,
-                    borderColor: currentColors.border,
-                  }
-                ]}
-                placeholder="Enter your email"
-                placeholderTextColor={currentColors.textTertiary}
+                style={[styles.input, { color: theme.text }]}
+                placeholder="Email"
+                placeholderTextColor={theme.textSecondary}
                 value={email}
                 onChangeText={setEmail}
-                keyboardType="email-address"
                 autoCapitalize="none"
-                autoCorrect={false}
+                keyboardType="email-address"
                 editable={!loading}
               />
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: currentColors.text }]}>Password</Text>
+              <IconSymbol name="lock.fill" size={20} color={theme.textSecondary} />
               <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: currentColors.card,
-                    color: currentColors.text,
-                    borderColor: currentColors.border,
-                  }
-                ]}
-                placeholder="Enter your password"
-                placeholderTextColor={currentColors.textTertiary}
+                style={[styles.input, { color: theme.text }]}
+                placeholder="Password"
+                placeholderTextColor={theme.textSecondary}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
                 editable={!loading}
               />
             </View>
 
             <TouchableOpacity
               style={[
-                styles.loginButton, 
-                { backgroundColor: currentColors.sage },
-                loading && styles.buttonDisabled
+                buttonStyles.primary,
+                { backgroundColor: theme.primary },
+                loading && styles.disabledButton,
               ]}
               onPress={handleLogin}
               disabled={loading}
             >
-              <Text style={[styles.loginButtonText, { color: currentColors.text }]}>
-                {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={buttonStyles.primaryText}>Login</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[buttonStyles.secondary, { borderColor: theme.border }]}
+              onPress={handleBiometricLogin}
+              disabled={loading}
+            >
+              <IconSymbol name="faceid" size={20} color={theme.primary} />
+              <Text style={[buttonStyles.secondaryText, { color: theme.primary }]}>
+                Login with Biometrics
               </Text>
             </TouchableOpacity>
 
             <View style={styles.divider}>
-              <View style={[styles.dividerLine, { backgroundColor: currentColors.border }]} />
-              <Text style={[styles.dividerText, { color: currentColors.textSecondary }]}>or</Text>
-              <View style={[styles.dividerLine, { backgroundColor: currentColors.border }]} />
+              <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+              <Text style={[styles.dividerText, { color: theme.textSecondary }]}>
+                Quick Demo Login
+              </Text>
+              <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
             </View>
 
             <TouchableOpacity
-              style={[
-                styles.biometricButton,
-                {
-                  backgroundColor: currentColors.card,
-                  borderColor: currentColors.border,
-                }
-              ]}
-              onPress={handleBiometricLogin}
+              style={[styles.demoButton, { backgroundColor: theme.card, borderColor: theme.border }]}
+              onPress={() => quickLogin('employee@hotel.com', 'password123')}
               disabled={loading}
             >
-              <IconSymbol name="faceid" size={24} color={currentColors.text} />
-              <Text style={[styles.biometricButtonText, { color: currentColors.text }]}>
-                Sign in with Face ID
+              <Text style={[styles.demoButtonText, { color: theme.text }]}>
+                Employee Account
               </Text>
             </TouchableOpacity>
-          </View>
 
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={[styles.footerText, { color: currentColors.textSecondary }]}>
-              Don&apos;t have an account?
-            </Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-              <Text style={[styles.footerLink, { color: currentColors.sage }]}>
-                Sign Up
+            <TouchableOpacity
+              style={[styles.demoButton, { backgroundColor: theme.card, borderColor: theme.border }]}
+              onPress={() => quickLogin('admin@hotel.com', 'admin123')}
+              disabled={loading}
+            >
+              <Text style={[styles.demoButtonText, { color: theme.text }]}>
+                Admin Account
               </Text>
             </TouchableOpacity>
-          </View>
 
-          {/* Demo Credentials */}
-          <View style={[styles.demoCard, { backgroundColor: currentColors.card }]}>
-            <Text style={[styles.demoTitle, { color: currentColors.text }]}>
-              Demo Accounts - Try Different Layouts!
-            </Text>
-            <Text style={[styles.demoSubtitle, { color: currentColors.textSecondary }]}>
-              Each category has a unique design
-            </Text>
-            
-            <TouchableOpacity 
-              style={[styles.quickLoginButton, { backgroundColor: '#7BA05B20', borderColor: '#7BA05B' }]}
-              onPress={() => quickLogin('breakfast-admin@hotel.com', 'admin123')}
+            <TouchableOpacity
+              style={styles.registerLink}
+              onPress={() => router.push('/(auth)/register')}
               disabled={loading}
             >
-              <View style={styles.quickLoginContent}>
-                <IconSymbol name="cup.and.saucer.fill" size={20} color="#7BA05B" />
-                <View style={styles.quickLoginText}>
-                  <Text style={[styles.quickLoginTitle, { color: currentColors.text }]}>
-                    Breakfast (Plant Shop Style)
-                  </Text>
-                  <Text style={[styles.quickLoginEmail, { color: currentColors.textSecondary }]}>
-                    breakfast-admin@hotel.com
-                  </Text>
-                </View>
-              </View>
+              <Text style={[styles.registerText, { color: theme.textSecondary }]}>
+                Don&apos;t have an account?{' '}
+                <Text style={{ color: theme.primary, fontWeight: '600' }}>Register</Text>
+              </Text>
             </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.quickLoginButton, { backgroundColor: '#FF6B5A20', borderColor: '#FF6B5A' }]}
-              onPress={() => quickLogin('frontdesk-admin@hotel.com', 'admin123')}
-              disabled={loading}
-            >
-              <View style={styles.quickLoginContent}>
-                <IconSymbol name="person.2.fill" size={20} color="#FF6B5A" />
-                <View style={styles.quickLoginText}>
-                  <Text style={[styles.quickLoginTitle, { color: currentColors.text }]}>
-                    Front Desk (Transport Card Style)
-                  </Text>
-                  <Text style={[styles.quickLoginEmail, { color: currentColors.textSecondary }]}>
-                    frontdesk-admin@hotel.com
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.quickLoginButton, { backgroundColor: '#6B9AC420', borderColor: '#6B9AC4' }]}
-              onPress={() => quickLogin('housekeeping-admin@hotel.com', 'admin123')}
-              disabled={loading}
-            >
-              <View style={styles.quickLoginContent}>
-                <IconSymbol name="bed.double.fill" size={20} color="#6B9AC4" />
-                <View style={styles.quickLoginText}>
-                  <Text style={[styles.quickLoginTitle, { color: currentColors.text }]}>
-                    Housekeeping (Air Quality Style)
-                  </Text>
-                  <Text style={[styles.quickLoginEmail, { color: currentColors.textSecondary }]}>
-                    housekeeping-admin@hotel.com
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            <View style={[styles.divider, { marginVertical: 16 }]}>
-              <View style={[styles.dividerLine, { backgroundColor: currentColors.border }]} />
-            </View>
-
-            <Text style={[styles.demoText, { color: currentColors.textSecondary }]}>
-              Password for all: admin123
-            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -341,160 +283,72 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 24,
     justifyContent: 'center',
+    padding: 24,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 48,
-  },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-    boxShadow: '0px 8px 24px rgba(184, 197, 184, 0.3)',
-    elevation: 4,
+    marginBottom: 40,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '700',
-    marginBottom: 8,
-    letterSpacing: -0.5,
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginTop: 16,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 15,
-    textAlign: 'center',
-    letterSpacing: 0.1,
-    lineHeight: 22,
+    fontSize: 18,
+    marginTop: 8,
   },
   form: {
-    marginBottom: 32,
+    width: '100%',
   },
   inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-    letterSpacing: 0.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(184, 197, 184, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    height: 56,
   },
   input: {
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    flex: 1,
+    marginLeft: 12,
     fontSize: 16,
-    letterSpacing: 0.2,
-  },
-  loginButton: {
-    borderRadius: 20,
-    paddingVertical: 18,
-    alignItems: 'center',
-    marginTop: 8,
-    boxShadow: '0px 6px 20px rgba(184, 197, 184, 0.3)',
-    elevation: 3,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  loginButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
-    letterSpacing: 0.3,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 28,
+    marginVertical: 24,
   },
   dividerLine: {
     flex: 1,
     height: 1,
   },
   dividerText: {
-    marginHorizontal: 16,
-    fontSize: 13,
-    letterSpacing: 0.2,
-  },
-  biometricButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingVertical: 18,
-  },
-  biometricButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 24,
-  },
-  footerText: {
+    marginHorizontal: 12,
     fontSize: 14,
-    letterSpacing: 0.1,
   },
-  footerLink: {
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-  demoCard: {
-    borderRadius: 20,
-    padding: 20,
-    marginTop: 32,
-    boxShadow: '0px 4px 16px rgba(45, 45, 45, 0.04)',
-    elevation: 1,
-  },
-  demoTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-    letterSpacing: 0.3,
-  },
-  demoSubtitle: {
-    fontSize: 13,
-    marginBottom: 16,
-    letterSpacing: 0.1,
-  },
-  quickLoginButton: {
-    borderRadius: 16,
+  demoButton: {
     padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
     marginBottom: 12,
-    borderWidth: 2,
-  },
-  quickLoginContent: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
   },
-  quickLoginText: {
-    flex: 1,
-    gap: 2,
-  },
-  quickLoginTitle: {
-    fontSize: 14,
+  demoButtonText: {
+    fontSize: 16,
     fontWeight: '600',
-    letterSpacing: 0.2,
   },
-  quickLoginEmail: {
-    fontSize: 12,
-    letterSpacing: 0.1,
+  registerLink: {
+    marginTop: 24,
+    alignItems: 'center',
   },
-  demoText: {
-    fontSize: 13,
-    textAlign: 'center',
-    letterSpacing: 0.1,
+  registerText: {
+    fontSize: 16,
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
 });

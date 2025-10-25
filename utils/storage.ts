@@ -1,6 +1,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, Shift, TimeEntry, LeaveRequest, ShiftRequest, AvailabilityDay, Notification, MonthlyReport } from '@/types';
+import { supabase } from '@/app/integrations/supabase/client';
 
 const KEYS = {
   USER: '@user',
@@ -66,9 +67,19 @@ export const setAuthenticated = async (isAuth: boolean): Promise<void> => {
 
 export const isAuthenticated = async (): Promise<boolean> => {
   try {
+    // First check Supabase session (source of truth)
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session) {
+      // Update local storage to match
+      await setAuthenticated(true);
+      return true;
+    }
+    
+    // No Supabase session, check local storage as fallback
     const authStatus = await AsyncStorage.getItem(KEYS.IS_AUTHENTICATED);
     const isAuth = authStatus ? JSON.parse(authStatus) : false;
-    console.log('Storage: Authentication status:', isAuth);
+    console.log('Storage: Authentication status (local):', isAuth);
     return isAuth;
   } catch (error) {
     console.error('Storage: Error checking authentication status:', error);

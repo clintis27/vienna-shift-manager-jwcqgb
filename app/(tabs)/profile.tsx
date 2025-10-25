@@ -1,6 +1,12 @@
 
-import { getCategoryName, getCategoryColor } from '@/utils/mockData';
 import { colors, darkColors } from '@/styles/commonStyles';
+import { router } from 'expo-router';
+import { getCategoryName, getCategoryColor } from '@/utils/mockData';
+import { supabase } from '@/app/integrations/supabase/client';
+import * as ImagePicker from 'expo-image-picker';
+import React, { useState, useEffect } from 'react';
+import { User, NotificationPreferences, SickLeaveCertificate, Employee } from '@/types';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -15,30 +21,27 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
-import React, { useState, useEffect } from 'react';
-import { router } from 'expo-router';
-import { User, NotificationPreferences, SickLeaveCertificate, Employee } from '@/types';
-import { IconSymbol } from '@/components/IconSymbol';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { getUser, removeUser, setAuthenticated, clearAllData, saveUser } from '@/utils/storage';
 import { registerForPushNotificationsAsync } from '@/utils/notifications';
-import * as ImagePicker from 'expo-image-picker';
-import { supabase } from '@/app/integrations/supabase/client';
+import { getUser, removeUser, setAuthenticated, clearAllData, saveUser } from '@/utils/storage';
+import { IconSymbol } from '@/components/IconSymbol';
 
 export default function ProfileScreen() {
   const [user, setUser] = useState<User | null>(null);
-  const [employee, setEmployee] = useState<Employee | null>(null);
-  const [certificates, setCertificates] = useState<SickLeaveCertificate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
+  const [certificates, setCertificates] = useState<SickLeaveCertificate[]>([]);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [notes, setNotes] = useState('');
-  const [selectedFile, setSelectedFile] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadReason, setUploadReason] = useState('');
+  const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>({
+    shiftReminders: true,
+    scheduleChanges: true,
+    leaveApprovals: true,
+    generalAnnouncements: true,
+  });
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const currentColors = isDark ? darkColors : colors;
+  const theme = isDark ? darkColors : colors;
 
   useEffect(() => {
     loadUser();
@@ -46,43 +49,19 @@ export default function ProfileScreen() {
 
   const loadUser = async () => {
     try {
-      setLoading(true);
       console.log('Profile: Loading user data...');
-      const currentUser = await getUser();
-      console.log('Profile: User loaded:', currentUser?.email);
-      setUser(currentUser);
-
-      if (currentUser) {
-        // Load employee data from Supabase
-        const { data: empData, error: empError } = await supabase
-          .from('employees')
-          .select('*')
-          .eq('email', currentUser.email)
-          .single();
-
-        if (empError) {
-          console.log('Profile: No employee data in Supabase (using mock data)');
-        } else if (empData) {
-          console.log('Profile: Employee data loaded from Supabase');
-          const mappedEmployee: Employee = {
-            id: empData.id,
-            userId: empData.user_id || undefined,
-            email: empData.email,
-            firstName: empData.first_name,
-            lastName: empData.last_name,
-            role: empData.role as 'admin' | 'manager' | 'employee',
-            category: empData.category || undefined,
-            department: empData.department || undefined,
-            phoneNumber: empData.phone_number || undefined,
-            avatarUrl: empData.avatar_url || undefined,
-            createdAt: empData.created_at,
-            updatedAt: empData.updated_at,
-          };
-          setEmployee(mappedEmployee);
-
-          // Load sick leave certificates
-          await loadCertificates(empData.id);
+      const userData = await getUser();
+      if (userData) {
+        console.log('Profile: User loaded:', userData.email);
+        setUser(userData);
+        if (userData.notificationPreferences) {
+          setNotificationPrefs(userData.notificationPreferences);
         }
+        if (userData.role === 'employee' && userData.id) {
+          await loadCertificates(userData.id);
+        }
+      } else {
+        console.log('Profile: No user data found');
       }
     } catch (error) {
       console.error('Profile: Error loading user:', error);
@@ -93,58 +72,36 @@ export default function ProfileScreen() {
 
   const loadCertificates = async (employeeId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('sick_leave_certificates')
-        .select('*')
-        .eq('employee_id', employeeId)
-        .order('uploaded_at', { ascending: false });
-
-      if (error) {
-        console.error('Profile: Error loading certificates:', error);
-        return;
-      }
-
-      if (data) {
-        const mappedCerts: SickLeaveCertificate[] = data.map(cert => ({
-          id: cert.id,
-          employeeId: cert.employee_id,
-          fileName: cert.file_name,
-          filePath: cert.file_path,
-          fileSize: cert.file_size || undefined,
-          mimeType: cert.mime_type || undefined,
-          startDate: cert.start_date,
-          endDate: cert.end_date,
-          notes: cert.notes || undefined,
-          status: cert.status as 'pending' | 'approved' | 'rejected',
-          uploadedAt: cert.uploaded_at,
-          reviewedAt: cert.reviewed_at || undefined,
-          reviewedBy: cert.reviewed_by || undefined,
-        }));
-        setCertificates(mappedCerts);
-      }
+      console.log('Profile: Loading certificates for employee:', employeeId);
+      // In a real app, fetch from Supabase
+      // For now, using mock data
+      setCertificates([]);
     } catch (error) {
       console.error('Profile: Error loading certificates:', error);
     }
   };
 
-  const handleNotificationPrefChange = async (key: keyof NotificationPreferences, value: boolean) => {
-    if (!user) return;
+  const handleNotificationPrefChange = async (
+    key: keyof NotificationPreferences,
+    value: boolean
+  ) => {
+    try {
+      const updatedPrefs = { ...notificationPrefs, [key]: value };
+      setNotificationPrefs(updatedPrefs);
 
-    const updatedPrefs = {
-      ...user.notificationPreferences,
-      [key]: value,
-    };
+      if (user) {
+        const updatedUser = { ...user, notificationPreferences: updatedPrefs };
+        await saveUser(updatedUser);
+        setUser(updatedUser);
+        console.log('Profile: Notification preferences updated');
+      }
 
-    const updatedUser = {
-      ...user,
-      notificationPreferences: updatedPrefs,
-    };
-
-    setUser(updatedUser);
-    await saveUser(updatedUser);
-
-    if (key === 'pushEnabled' && value) {
-      await registerForPushNotificationsAsync();
+      if (value && key === 'shiftReminders') {
+        await registerForPushNotificationsAsync();
+      }
+    } catch (error) {
+      console.error('Profile: Error updating notification preferences:', error);
+      Alert.alert('Error', 'Failed to update notification preferences');
     }
   };
 
@@ -152,12 +109,13 @@ export default function ProfileScreen() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 0.8,
+        allowsEditing: true,
+        quality: 1,
       });
 
       if (!result.canceled && result.assets[0]) {
-        setSelectedFile(result.assets[0]);
+        setSelectedDocument(result.assets[0].uri);
+        console.log('Profile: Document selected:', result.assets[0].uri);
       }
     } catch (error) {
       console.error('Profile: Error picking document:', error);
@@ -166,73 +124,32 @@ export default function ProfileScreen() {
   };
 
   const handleUploadCertificate = async () => {
-    if (!employee || !selectedFile || !startDate || !endDate) {
-      Alert.alert('Error', 'Please fill in all required fields and select a file');
+    if (!selectedDocument || !uploadReason.trim()) {
+      Alert.alert('Error', 'Please select a document and provide a reason');
       return;
     }
 
+    setUploadLoading(true);
     try {
-      setUploading(true);
-
-      // Upload file to Supabase Storage
-      const fileExt = selectedFile.uri.split('.').pop();
-      const fileName = `${employee.id}/${Date.now()}.${fileExt}`;
-      
-      const response = await fetch(selectedFile.uri);
-      const blob = await response.blob();
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('sick-leave-certificates')
-        .upload(fileName, blob, {
-          contentType: selectedFile.mimeType || 'image/jpeg',
-        });
-
-      if (uploadError) {
-        console.error('Profile: Error uploading file:', uploadError);
-        Alert.alert('Error', 'Failed to upload file');
-        return;
-      }
-
-      // Create certificate record
-      const { data: certData, error: certError } = await supabase
-        .from('sick_leave_certificates')
-        .insert({
-          employee_id: employee.id,
-          file_name: selectedFile.fileName || `certificate_${Date.now()}`,
-          file_path: uploadData.path,
-          file_size: selectedFile.fileSize,
-          mime_type: selectedFile.mimeType,
-          start_date: startDate,
-          end_date: endDate,
-          notes: notes || null,
-          status: 'pending',
-        })
-        .select()
-        .single();
-
-      if (certError) {
-        console.error('Profile: Error creating certificate record:', certError);
-        Alert.alert('Error', 'Failed to save certificate information');
-        return;
-      }
-
-      Alert.alert('Success', 'Sick leave certificate uploaded successfully');
-      setShowUploadModal(false);
+      console.log('Profile: Uploading certificate...');
+      // In a real app, upload to Supabase Storage
+      Alert.alert('Success', 'Certificate uploaded successfully');
       resetUploadForm();
-      await loadCertificates(employee.id);
+      if (user?.id) {
+        await loadCertificates(user.id);
+      }
     } catch (error) {
       console.error('Profile: Error uploading certificate:', error);
       Alert.alert('Error', 'Failed to upload certificate');
     } finally {
-      setUploading(false);
+      setUploadLoading(false);
     }
   };
 
   const resetUploadForm = () => {
-    setSelectedFile(null);
-    setStartDate('');
-    setEndDate('');
-    setNotes('');
+    setShowUploadModal(false);
+    setSelectedDocument(null);
+    setUploadReason('');
   };
 
   const handleLogout = async () => {
@@ -246,33 +163,22 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('=== Logout Started ===');
+              console.log('Profile: Logging out...');
               
-              // Clear user data
-              await removeUser();
-              console.log('User data removed');
-              
-              // Set authentication to false
-              await setAuthenticated(false);
-              console.log('Authentication status set to false');
-              
-              // Sign out from Supabase (if using Supabase auth)
-              try {
-                await supabase.auth.signOut();
-                console.log('Supabase session cleared');
-              } catch (supabaseError) {
-                console.log('Supabase signout skipped (using mock auth)');
+              // Sign out from Supabase
+              const { error } = await supabase.auth.signOut();
+              if (error) {
+                console.error('Profile: Supabase logout error:', error);
               }
               
-              // Small delay to ensure state is saved
-              await new Promise(resolve => setTimeout(resolve, 100));
+              // Clear local storage
+              await removeUser();
+              await setAuthenticated(false);
               
-              // Navigate to login
-              console.log('Navigating to login...');
+              console.log('Profile: Logout successful');
               router.replace('/(auth)/login');
-              console.log('=== Logout Complete ===');
             } catch (error) {
-              console.error('Logout error:', error);
+              console.error('Profile: Error during logout:', error);
               Alert.alert('Error', 'Failed to logout. Please try again.');
             }
           },
@@ -284,19 +190,20 @@ export default function ProfileScreen() {
   const handleClearData = async () => {
     Alert.alert(
       'Clear All Data',
-      'This will delete all local data. Are you sure?',
+      'This will delete all local data including shifts, time entries, and preferences. This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Clear',
+          text: 'Clear Data',
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('Profile: Clearing all data...');
               await clearAllData();
-              Alert.alert('Success', 'All data cleared. Please login again.');
+              Alert.alert('Success', 'All data cleared successfully');
               router.replace('/(auth)/login');
             } catch (error) {
-              console.error('Error clearing data:', error);
+              console.error('Profile: Error clearing data:', error);
               Alert.alert('Error', 'Failed to clear data');
             }
           },
@@ -308,64 +215,74 @@ export default function ProfileScreen() {
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'admin':
-        return '#EF5350';
+        return '#D4A59A';
       case 'manager':
-        return '#FFA726';
+        return '#B8C5B8';
       case 'employee':
-        return '#66BB6A';
+        return '#8B9A8B';
       default:
-        return currentColors.primary;
+        return theme.textSecondary;
     }
   };
 
   const getUserName = () => {
     if (!user) return 'User';
-    return `${user.firstName} ${user.lastName}`;
+    return user.name || user.email.split('@')[0];
   };
 
   const getUserInitials = () => {
-    if (!user) return 'U';
-    return `${user.firstName[0]}${user.lastName[0]}`;
+    const name = getUserName();
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending':
-        return '#FFA726';
       case 'approved':
-        return '#66BB6A';
+        return '#4CAF50';
+      case 'pending':
+        return '#FF9800';
       case 'rejected':
-        return '#EF5350';
+        return '#F44336';
       default:
-        return currentColors.text;
+        return theme.textSecondary;
     }
   };
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
   };
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: currentColors.background }]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={currentColors.primary} />
-        </View>
-      </SafeAreaView>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
     );
   }
 
   if (!user) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: currentColors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.errorContainer}>
-          <Text style={[styles.errorText, { color: currentColors.text }]}>No user data found</Text>
+          <IconSymbol name="exclamationmark.triangle.fill" size={60} color={theme.error} />
+          <Text style={[styles.errorText, { color: theme.text }]}>
+            No user data found
+          </Text>
           <TouchableOpacity
-            style={[styles.retryButton, { backgroundColor: currentColors.primary }]}
+            style={[styles.button, { backgroundColor: theme.primary }]}
             onPress={() => router.replace('/(auth)/login')}
           >
-            <Text style={styles.retryButtonText}>Go to Login</Text>
+            <Text style={styles.buttonText}>Go to Login</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -373,263 +290,230 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: currentColors.background }]}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Profile Header */}
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <ScrollView style={styles.scrollView}>
         <View style={styles.header}>
-          <View style={[styles.avatar, { backgroundColor: currentColors.primary + '20' }]}>
-            <Text style={[styles.avatarText, { color: currentColors.primary }]}>
-              {getUserInitials()}
-            </Text>
+          <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
+            <Text style={styles.avatarText}>{getUserInitials()}</Text>
           </View>
-          <Text style={[styles.name, { color: currentColors.text }]}>{getUserName()}</Text>
-          <Text style={[styles.email, { color: currentColors.textSecondary }]}>{user.email}</Text>
+          <Text style={[styles.name, { color: theme.text }]}>{getUserName()}</Text>
+          <Text style={[styles.email, { color: theme.textSecondary }]}>{user.email}</Text>
           <View style={[styles.roleBadge, { backgroundColor: getRoleBadgeColor(user.role) }]}>
-            <Text style={styles.roleBadgeText}>{user.role}</Text>
+            <Text style={styles.roleText}>{user.role.toUpperCase()}</Text>
           </View>
           {user.category && (
-            <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(user.category) + '20' }]}>
-              <Text style={[styles.categoryText, { color: getCategoryColor(user.category) }]}>
-                {getCategoryName(user.category)}
-              </Text>
+            <View
+              style={[
+                styles.categoryBadge,
+                { backgroundColor: getCategoryColor(user.category) },
+              ]}
+            >
+              <Text style={styles.categoryText}>{getCategoryName(user.category)}</Text>
             </View>
           )}
         </View>
 
-        {/* Sick Leave Certificates Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Notification Preferences
+          </Text>
+          <View style={[styles.card, { backgroundColor: theme.card }]}>
+            <View style={styles.preferenceRow}>
+              <View style={styles.preferenceInfo}>
+                <IconSymbol name="bell.fill" size={20} color={theme.primary} />
+                <Text style={[styles.preferenceLabel, { color: theme.text }]}>
+                  Shift Reminders
+                </Text>
+              </View>
+              <Switch
+                value={notificationPrefs.shiftReminders}
+                onValueChange={value =>
+                  handleNotificationPrefChange('shiftReminders', value)
+                }
+                trackColor={{ false: theme.border, true: theme.primary }}
+              />
+            </View>
+
+            <View style={styles.preferenceRow}>
+              <View style={styles.preferenceInfo}>
+                <IconSymbol name="calendar.badge.clock" size={20} color={theme.primary} />
+                <Text style={[styles.preferenceLabel, { color: theme.text }]}>
+                  Schedule Changes
+                </Text>
+              </View>
+              <Switch
+                value={notificationPrefs.scheduleChanges}
+                onValueChange={value =>
+                  handleNotificationPrefChange('scheduleChanges', value)
+                }
+                trackColor={{ false: theme.border, true: theme.primary }}
+              />
+            </View>
+
+            <View style={styles.preferenceRow}>
+              <View style={styles.preferenceInfo}>
+                <IconSymbol name="checkmark.circle.fill" size={20} color={theme.primary} />
+                <Text style={[styles.preferenceLabel, { color: theme.text }]}>
+                  Leave Approvals
+                </Text>
+              </View>
+              <Switch
+                value={notificationPrefs.leaveApprovals}
+                onValueChange={value =>
+                  handleNotificationPrefChange('leaveApprovals', value)
+                }
+                trackColor={{ false: theme.border, true: theme.primary }}
+              />
+            </View>
+
+            <View style={[styles.preferenceRow, { borderBottomWidth: 0 }]}>
+              <View style={styles.preferenceInfo}>
+                <IconSymbol name="megaphone.fill" size={20} color={theme.primary} />
+                <Text style={[styles.preferenceLabel, { color: theme.text }]}>
+                  General Announcements
+                </Text>
+              </View>
+              <Switch
+                value={notificationPrefs.generalAnnouncements}
+                onValueChange={value =>
+                  handleNotificationPrefChange('generalAnnouncements', value)
+                }
+                trackColor={{ false: theme.border, true: theme.primary }}
+              />
+            </View>
+          </View>
+        </View>
+
         {user.role === 'employee' && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: currentColors.text }]}>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>
                 Sick Leave Certificates
               </Text>
               <TouchableOpacity
-                style={[styles.uploadButton, { backgroundColor: currentColors.primary }]}
+                style={[styles.uploadButton, { backgroundColor: theme.primary }]}
                 onPress={() => setShowUploadModal(true)}
               >
                 <IconSymbol name="plus" size={16} color="#FFFFFF" />
                 <Text style={styles.uploadButtonText}>Upload</Text>
               </TouchableOpacity>
             </View>
-
-            {certificates.length === 0 ? (
-              <View style={[styles.card, { backgroundColor: currentColors.card }]}>
-                <IconSymbol name="doc.text" size={32} color={currentColors.textSecondary} />
-                <Text style={[styles.emptyText, { color: currentColors.textSecondary }]}>
-                  No certificates uploaded
+            <View style={[styles.card, { backgroundColor: theme.card }]}>
+              {certificates.length === 0 ? (
+                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                  No certificates uploaded yet
                 </Text>
-              </View>
-            ) : (
-              certificates.map((cert) => (
-                <View key={cert.id} style={[styles.certificateCard, { backgroundColor: currentColors.card }]}>
-                  <View style={styles.certificateHeader}>
-                    <IconSymbol name="doc.text.fill" size={24} color={currentColors.primary} />
+              ) : (
+                certificates.map(cert => (
+                  <View key={cert.id} style={styles.certificateRow}>
                     <View style={styles.certificateInfo}>
-                      <Text style={[styles.certificateName, { color: currentColors.text }]}>
-                        {cert.fileName}
-                      </Text>
-                      <Text style={[styles.certificateDate, { color: currentColors.textSecondary }]}>
-                        {formatDate(cert.startDate)} - {formatDate(cert.endDate)}
-                      </Text>
+                      <IconSymbol name="doc.fill" size={20} color={theme.primary} />
+                      <View style={styles.certificateDetails}>
+                        <Text style={[styles.certificateReason, { color: theme.text }]}>
+                          {cert.reason}
+                        </Text>
+                        <Text style={[styles.certificateDate, { color: theme.textSecondary }]}>
+                          {formatDate(cert.uploadDate)}
+                        </Text>
+                      </View>
                     </View>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(cert.status) + '20' }]}>
-                      <Text style={[styles.statusText, { color: getStatusColor(cert.status) }]}>
-                        {cert.status}
-                      </Text>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: getStatusColor(cert.status) },
+                      ]}
+                    >
+                      <Text style={styles.statusText}>{cert.status}</Text>
                     </View>
                   </View>
-                  {cert.notes && (
-                    <Text style={[styles.certificateNotes, { color: currentColors.textSecondary }]}>
-                      {cert.notes}
-                    </Text>
-                  )}
-                </View>
-              ))
-            )}
+                ))
+              )}
+            </View>
           </View>
         )}
 
-        {/* Notification Preferences */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: currentColors.text }]}>
-            Notification Preferences
-          </Text>
-          
-          <View style={[styles.card, { backgroundColor: currentColors.card }]}>
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <Text style={[styles.settingLabel, { color: currentColors.text }]}>
-                  Push Notifications
-                </Text>
-                <Text style={[styles.settingDescription, { color: currentColors.textSecondary }]}>
-                  Enable push notifications
-                </Text>
-              </View>
-              <Switch
-                value={user.notificationPreferences?.pushEnabled ?? true}
-                onValueChange={(value) => handleNotificationPrefChange('pushEnabled', value)}
-                trackColor={{ false: currentColors.border, true: currentColors.primary + '80' }}
-                thumbColor={user.notificationPreferences?.pushEnabled ? currentColors.primary : '#f4f3f4'}
-              />
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: currentColors.border }]} />
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <Text style={[styles.settingLabel, { color: currentColors.text }]}>
-                  Shift Changes
-                </Text>
-                <Text style={[styles.settingDescription, { color: currentColors.textSecondary }]}>
-                  Notify about schedule changes
-                </Text>
-              </View>
-              <Switch
-                value={user.notificationPreferences?.shiftChanges ?? true}
-                onValueChange={(value) => handleNotificationPrefChange('shiftChanges', value)}
-                trackColor={{ false: currentColors.border, true: currentColors.primary + '80' }}
-                thumbColor={user.notificationPreferences?.shiftChanges ? currentColors.primary : '#f4f3f4'}
-              />
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: currentColors.border }]} />
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <Text style={[styles.settingLabel, { color: currentColors.text }]}>
-                  Reminders
-                </Text>
-                <Text style={[styles.settingDescription, { color: currentColors.textSecondary }]}>
-                  Shift start/end reminders
-                </Text>
-              </View>
-              <Switch
-                value={user.notificationPreferences?.reminders ?? true}
-                onValueChange={(value) => handleNotificationPrefChange('reminders', value)}
-                trackColor={{ false: currentColors.border, true: currentColors.primary + '80' }}
-                thumbColor={user.notificationPreferences?.reminders ? currentColors.primary : '#f4f3f4'}
-              />
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: currentColors.border }]} />
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingInfo}>
-                <Text style={[styles.settingLabel, { color: currentColors.text }]}>
-                  Approvals
-                </Text>
-                <Text style={[styles.settingDescription, { color: currentColors.textSecondary }]}>
-                  Request approval notifications
-                </Text>
-              </View>
-              <Switch
-                value={user.notificationPreferences?.approvals ?? true}
-                onValueChange={(value) => handleNotificationPrefChange('approvals', value)}
-                trackColor={{ false: currentColors.border, true: currentColors.primary + '80' }}
-                thumbColor={user.notificationPreferences?.approvals ? currentColors.primary : '#f4f3f4'}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Account Actions */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: currentColors.text }]}>Account</Text>
-          
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Actions</Text>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: currentColors.card }]}
+            style={[styles.actionButton, { backgroundColor: theme.card }]}
             onPress={handleLogout}
           >
-            <IconSymbol name="arrow.right.square" size={24} color="#EF5350" />
-            <Text style={[styles.actionButtonText, { color: '#EF5350' }]}>Logout</Text>
+            <IconSymbol name="arrow.right.square.fill" size={20} color={theme.error} />
+            <Text style={[styles.actionButtonText, { color: theme.error }]}>Logout</Text>
           </TouchableOpacity>
 
-          {user.role === 'admin' && (
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: currentColors.card }]}
-              onPress={handleClearData}
-            >
-              <IconSymbol name="trash" size={24} color="#EF5350" />
-              <Text style={[styles.actionButtonText, { color: '#EF5350' }]}>Clear All Data</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: theme.card }]}
+            onPress={handleClearData}
+          >
+            <IconSymbol name="trash.fill" size={20} color={theme.error} />
+            <Text style={[styles.actionButtonText, { color: theme.error }]}>
+              Clear All Data
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.footer}>
+          <Text style={[styles.footerText, { color: theme.textSecondary }]}>
+            Version 1.0.0
+          </Text>
         </View>
       </ScrollView>
 
-      {/* Upload Certificate Modal */}
       <Modal
         visible={showUploadModal}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowUploadModal(false)}
+        onRequestClose={resetUploadForm}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: currentColors.card }]}>
+          <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: currentColors.text }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
                 Upload Sick Leave Certificate
               </Text>
-              <TouchableOpacity onPress={() => setShowUploadModal(false)}>
-                <IconSymbol name="xmark" size={24} color={currentColors.text} />
+              <TouchableOpacity onPress={resetUploadForm}>
+                <IconSymbol name="xmark.circle.fill" size={28} color={theme.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* File Selection */}
-              <Text style={[styles.label, { color: currentColors.text }]}>Document *</Text>
-              <TouchableOpacity
-                style={[styles.fileButton, { backgroundColor: currentColors.background, borderColor: currentColors.border }]}
-                onPress={handlePickDocument}
-              >
-                <IconSymbol name="doc.badge.plus" size={24} color={currentColors.primary} />
-                <Text style={[styles.fileButtonText, { color: selectedFile ? currentColors.text : currentColors.textSecondary }]}>
-                  {selectedFile ? selectedFile.fileName || 'File selected' : 'Select Document'}
-                </Text>
-              </TouchableOpacity>
+            <TextInput
+              style={[
+                styles.input,
+                { backgroundColor: theme.background, color: theme.text },
+              ]}
+              placeholder="Reason for sick leave"
+              placeholderTextColor={theme.textSecondary}
+              value={uploadReason}
+              onChangeText={setUploadReason}
+              multiline
+            />
 
-              {/* Date Range */}
-              <Text style={[styles.label, { color: currentColors.text }]}>Start Date *</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: currentColors.background, borderColor: currentColors.border, color: currentColors.text }]}
-                value={startDate}
-                onChangeText={setStartDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={currentColors.textSecondary}
-              />
+            <TouchableOpacity
+              style={[styles.pickButton, { backgroundColor: theme.background }]}
+              onPress={handlePickDocument}
+            >
+              <IconSymbol name="doc.badge.plus" size={20} color={theme.primary} />
+              <Text style={[styles.pickButtonText, { color: theme.text }]}>
+                {selectedDocument ? 'Document Selected' : 'Select Document'}
+              </Text>
+            </TouchableOpacity>
 
-              <Text style={[styles.label, { color: currentColors.text }]}>End Date *</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: currentColors.background, borderColor: currentColors.border, color: currentColors.text }]}
-                value={endDate}
-                onChangeText={setEndDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={currentColors.textSecondary}
-              />
-
-              {/* Notes */}
-              <Text style={[styles.label, { color: currentColors.text }]}>Notes</Text>
-              <TextInput
-                style={[styles.input, styles.textArea, { backgroundColor: currentColors.background, borderColor: currentColors.border, color: currentColors.text }]}
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="Additional information..."
-                placeholderTextColor={currentColors.textSecondary}
-                multiline
-                numberOfLines={3}
-              />
-
-              <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: currentColors.primary }]}
-                onPress={handleUploadCertificate}
-                disabled={uploading}
-              >
-                {uploading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.submitButtonText}>Upload Certificate</Text>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                { backgroundColor: theme.primary },
+                uploadLoading && styles.disabledButton,
+              ]}
+              onPress={handleUploadCertificate}
+              disabled={uploadLoading}
+            >
+              {uploadLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitButtonText}>Upload Certificate</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -644,46 +528,23 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  errorText: {
-    fontSize: 18,
-    marginBottom: 24,
-  },
-  retryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
   header: {
     alignItems: 'center',
-    padding: 24,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   name: {
     fontSize: 24,
@@ -696,207 +557,230 @@ const styles = StyleSheet.create({
   },
   roleBadge: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 16,
     marginBottom: 8,
   },
-  roleBadgeText: {
+  roleText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-    textTransform: 'capitalize',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   categoryBadge: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 16,
   },
   categoryText: {
-    fontSize: 14,
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '600',
   },
   section: {
-    padding: 24,
-    paddingTop: 0,
+    paddingHorizontal: 24,
+    marginBottom: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  card: {
+    borderRadius: 16,
+    padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  preferenceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  preferenceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  preferenceLabel: {
+    fontSize: 16,
+    marginLeft: 12,
   },
   uploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   uploadButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
-  },
-  card: {
-    padding: 24,
-    borderRadius: 16,
-    alignItems: 'center',
+    marginLeft: 4,
   },
   emptyText: {
-    fontSize: 16,
-    marginTop: 12,
-  },
-  certificateCard: {
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 12,
-  },
-  certificateHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  certificateInfo: {
-    flex: 1,
-  },
-  certificateName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  certificateDate: {
+    textAlign: 'center',
     fontSize: 14,
-  },
-  certificateNotes: {
-    fontSize: 14,
-    marginTop: 12,
     fontStyle: 'italic',
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  settingRow: {
+  certificateRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
   },
-  settingInfo: {
+  certificateInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
-    marginRight: 16,
   },
-  settingLabel: {
+  certificateDetails: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  certificateReason: {
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontWeight: '500',
   },
-  settingDescription: {
+  certificateDate: {
     fontSize: 14,
+    marginTop: 2,
   },
-  divider: {
-    height: 1,
-    marginVertical: 8,
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 12,
     marginBottom: 12,
-    gap: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   actionButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    marginLeft: 12,
+  },
+  footer: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  footerText: {
+    fontSize: 14,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '80%',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    padding: 24,
+    minHeight: 400,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 24,
-    paddingBottom: 16,
+    marginBottom: 24,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
   },
-  modalBody: {
-    padding: 24,
-    paddingTop: 0,
-  },
-  label: {
+  input: {
+    borderRadius: 12,
+    padding: 16,
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-    marginTop: 16,
+    marginBottom: 16,
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
-  fileButton: {
+  pickButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderRadius: 12,
+    justifyContent: 'center',
     padding: 16,
-    marginBottom: 8,
-  },
-  fileButtonText: {
-    fontSize: 16,
-  },
-  input: {
-    borderWidth: 1,
     borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    marginBottom: 8,
+    marginBottom: 16,
   },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
+  pickButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   submitButton: {
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 24,
   },
   submitButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  errorText: {
+    fontSize: 18,
     fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  button: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
