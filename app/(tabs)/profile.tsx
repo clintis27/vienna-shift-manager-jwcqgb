@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -49,14 +49,7 @@ export default function ProfileScreen() {
   const [notes, setNotes] = useState('');
   const [certificates, setCertificates] = useState<SickLeaveCertificate[]>([]);
 
-  useEffect(() => {
-    if (user) {
-      setNotificationPrefs(user.notificationPreferences || notificationPrefs);
-      loadCertificates(user.id);
-    }
-  }, [user]);
-
-  const loadCertificates = async (employeeId: string) => {
+  const loadCertificates = useCallback(async (employeeId: string) => {
     try {
       const { data, error } = await supabase
         .from('sick_leave_certificates')
@@ -69,7 +62,15 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error('Error loading certificates:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      const prefs = user.notificationPreferences || notificationPrefs;
+      setNotificationPrefs(prefs);
+      loadCertificates(user.id);
+    }
+  }, [user, loadCertificates]);
 
   const handleNotificationPrefChange = async (
     key: keyof NotificationPreferences,
