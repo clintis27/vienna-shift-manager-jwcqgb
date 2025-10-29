@@ -16,8 +16,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
+import SearchFilter from '@/components/SearchFilter';
 import { colors, darkColors, buttonStyles } from '@/styles/commonStyles';
 import { useAuth } from '@/hooks/useAuth';
+import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Employee, LeaveRequest, Task, SickLeaveCertificate, Document } from '@/types';
 import { formatDate } from '@/utils/dateHelpers';
@@ -33,6 +35,7 @@ export default function AdminEnhancedScreen() {
 
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [loading, setLoading] = useState(true);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   
   // Data states
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -41,6 +44,10 @@ export default function AdminEnhancedScreen() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
 
+  // Search and filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+
   // Task creation modal
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -48,6 +55,52 @@ export default function AdminEnhancedScreen() {
   const [taskDescription, setTaskDescription] = useState('');
   const [taskPriority, setTaskPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
   const [taskDueDate, setTaskDueDate] = useState('');
+
+  // Real-time subscriptions for instant updates
+  useRealtimeSubscription({
+    table: 'employees',
+    event: '*',
+    onChange: () => {
+      console.log('Employee data changed, reloading...');
+      loadEmployees();
+    },
+  });
+
+  useRealtimeSubscription({
+    table: 'leave_requests',
+    event: '*',
+    onChange: () => {
+      console.log('Leave request data changed, reloading...');
+      loadLeaveRequests();
+    },
+  });
+
+  useRealtimeSubscription({
+    table: 'sick_leave_certificates',
+    event: '*',
+    onChange: () => {
+      console.log('Certificate data changed, reloading...');
+      loadCertificates();
+    },
+  });
+
+  useRealtimeSubscription({
+    table: 'documents',
+    event: '*',
+    onChange: () => {
+      console.log('Document data changed, reloading...');
+      loadDocuments();
+    },
+  });
+
+  useRealtimeSubscription({
+    table: 'tasks',
+    event: '*',
+    onChange: () => {
+      console.log('Task data changed, reloading...');
+      loadTasks();
+    },
+  });
 
   useEffect(() => {
     if (user?.role === 'admin') {
@@ -415,10 +468,122 @@ export default function AdminEnhancedScreen() {
     setTaskDueDate('');
   };
 
+  // Filter data based on search and filters
+  const filterData = <T extends any>(data: T[], searchFields: string[]): T[] => {
+    let filtered = data;
+
+    // Apply search
+    if (searchQuery) {
+      filtered = filtered.filter((item: any) =>
+        searchFields.some((field) => {
+          const value = field.split('.').reduce((obj, key) => obj?.[key], item);
+          return value?.toString().toLowerCase().includes(searchQuery.toLowerCase());
+        })
+      );
+    }
+
+    // Apply filters
+    Object.entries(activeFilters).forEach(([key, value]) => {
+      if (value) {
+        filtered = filtered.filter((item: any) => item[key] === value);
+      }
+    });
+
+    return filtered;
+  };
+
+  const filteredEmployees = filterData(employees, ['firstName', 'lastName', 'email', 'department', 'role']);
+  const filteredLeaveRequests = filterData(leaveRequests, ['userName', 'type', 'status']);
+  const filteredCertificates = filterData(certificates, ['fileName', 'status']);
+  const filteredDocuments = filterData(documents, ['fileName', 'documentType', 'status']);
+  const filteredTasks = filterData(tasks, ['title', 'priority', 'status']);
+
   const pendingLeaveCount = leaveRequests.filter(r => r.status === 'pending').length;
   const pendingCertCount = certificates.filter(c => c.status === 'pending').length;
   const pendingDocCount = documents.filter(d => d.status === 'pending').length;
   const totalPending = pendingLeaveCount + pendingCertCount + pendingDocCount;
+
+  const getFilterOptions = () => {
+    switch (activeTab) {
+      case 'leave':
+        return [
+          {
+            label: 'Status',
+            key: 'status',
+            options: [
+              { label: 'All', value: '' },
+              { label: 'Pending', value: 'pending' },
+              { label: 'Approved', value: 'approved' },
+              { label: 'Rejected', value: 'rejected' },
+            ],
+          },
+          {
+            label: 'Type',
+            key: 'type',
+            options: [
+              { label: 'All', value: '' },
+              { label: 'Vacation', value: 'vacation' },
+              { label: 'Sick', value: 'sick' },
+              { label: 'Personal', value: 'personal' },
+              { label: 'Other', value: 'other' },
+            ],
+          },
+        ];
+      case 'tasks':
+        return [
+          {
+            label: 'Status',
+            key: 'status',
+            options: [
+              { label: 'All', value: '' },
+              { label: 'Pending', value: 'pending' },
+              { label: 'In Progress', value: 'in-progress' },
+              { label: 'Completed', value: 'completed' },
+              { label: 'Cancelled', value: 'cancelled' },
+            ],
+          },
+          {
+            label: 'Priority',
+            key: 'priority',
+            options: [
+              { label: 'All', value: '' },
+              { label: 'Low', value: 'low' },
+              { label: 'Medium', value: 'medium' },
+              { label: 'High', value: 'high' },
+              { label: 'Urgent', value: 'urgent' },
+            ],
+          },
+        ];
+      case 'employees':
+        return [
+          {
+            label: 'Role',
+            key: 'role',
+            options: [
+              { label: 'All', value: '' },
+              { label: 'Admin', value: 'admin' },
+              { label: 'Manager', value: 'manager' },
+              { label: 'Employee', value: 'employee' },
+            ],
+          },
+        ];
+      case 'documents':
+        return [
+          {
+            label: 'Status',
+            key: 'status',
+            options: [
+              { label: 'All', value: '' },
+              { label: 'Pending', value: 'pending' },
+              { label: 'Approved', value: 'approved' },
+              { label: 'Rejected', value: 'rejected' },
+            ],
+          },
+        ];
+      default:
+        return [];
+    }
+  };
 
   if (loading) {
     return (
@@ -446,12 +611,20 @@ export default function AdminEnhancedScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.text }]}>Admin Dashboard</Text>
-        {totalPending > 0 && (
-          <View style={[styles.badge, { backgroundColor: '#FF6B6B' }]}>
-            <Text style={styles.badgeText}>{totalPending}</Text>
+        <View style={styles.headerLeft}>
+          <Text style={[styles.title, { color: theme.text }]}>Admin Dashboard</Text>
+          {totalPending > 0 && (
+            <View style={[styles.badge, { backgroundColor: '#FF6B6B' }]}>
+              <Text style={styles.badgeText}>{totalPending}</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.headerRight}>
+          <View style={[styles.realtimeIndicator, { backgroundColor: '#4CAF50' }]}>
+            <View style={styles.realtimeDot} />
           </View>
-        )}
+          <Text style={[styles.realtimeText, { color: theme.textSecondary }]}>Live</Text>
+        </View>
       </View>
 
       {/* Tabs */}
@@ -542,6 +715,23 @@ export default function AdminEnhancedScreen() {
         </TouchableOpacity>
       </ScrollView>
 
+      {/* Search and Filter */}
+      {activeTab !== 'overview' && (
+        <View style={styles.searchContainer}>
+          <SearchFilter
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            filterOptions={getFilterOptions()}
+            activeFilters={activeFilters}
+            onFilterChange={(key, value) => {
+              setActiveFilters((prev) => ({ ...prev, [key]: value }));
+            }}
+            onClearFilters={() => setActiveFilters({})}
+            placeholder={`Search ${activeTab}...`}
+          />
+        </View>
+      )}
+
       {/* Content */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {activeTab === 'overview' && (
@@ -616,14 +806,16 @@ export default function AdminEnhancedScreen() {
 
         {activeTab === 'leave' && (
           <View style={styles.section}>
-            {leaveRequests.length === 0 ? (
+            {filteredLeaveRequests.length === 0 ? (
               <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
                 <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                  No leave requests
+                  {searchQuery || Object.values(activeFilters).some(Boolean)
+                    ? 'No matching leave requests'
+                    : 'No leave requests'}
                 </Text>
               </View>
             ) : (
-              leaveRequests.map((request) => (
+              filteredLeaveRequests.map((request) => (
                 <View key={request.id} style={[styles.card, { backgroundColor: theme.card }]}>
                   <View style={styles.cardHeader}>
                     <Text style={[styles.cardTitle, { color: theme.text }]}>{request.userName}</Text>
@@ -668,14 +860,16 @@ export default function AdminEnhancedScreen() {
           <View style={styles.section}>
             {/* Sick Leave Certificates */}
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Sick Leave Certificates</Text>
-            {certificates.length === 0 ? (
+            {filteredCertificates.length === 0 ? (
               <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
                 <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                  No certificates uploaded
+                  {searchQuery || Object.values(activeFilters).some(Boolean)
+                    ? 'No matching certificates'
+                    : 'No certificates uploaded'}
                 </Text>
               </View>
             ) : (
-              certificates.map((cert) => (
+              filteredCertificates.map((cert) => (
                 <View key={cert.id} style={[styles.card, { backgroundColor: theme.card }]}>
                   <View style={styles.cardHeader}>
                     <Text style={[styles.cardTitle, { color: theme.text }]}>
@@ -722,14 +916,16 @@ export default function AdminEnhancedScreen() {
 
             {/* General Documents */}
             <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 24 }]}>General Documents</Text>
-            {documents.length === 0 ? (
+            {filteredDocuments.length === 0 ? (
               <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
                 <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                  No documents uploaded
+                  {searchQuery || Object.values(activeFilters).some(Boolean)
+                    ? 'No matching documents'
+                    : 'No documents uploaded'}
                 </Text>
               </View>
             ) : (
-              documents.map((doc) => (
+              filteredDocuments.map((doc) => (
                 <View key={doc.id} style={[styles.card, { backgroundColor: theme.card }]}>
                   <View style={styles.cardHeader}>
                     <Text style={[styles.cardTitle, { color: theme.text }]}>
@@ -775,7 +971,16 @@ export default function AdminEnhancedScreen() {
 
         {activeTab === 'employees' && (
           <View style={styles.section}>
-            {employees.map((employee) => (
+            {filteredEmployees.length === 0 ? (
+              <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
+                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                  {searchQuery || Object.values(activeFilters).some(Boolean)
+                    ? 'No matching employees'
+                    : 'No employees found'}
+                </Text>
+              </View>
+            ) : (
+              filteredEmployees.map((employee) => (
               <View key={employee.id} style={[styles.card, { backgroundColor: theme.card }]}>
                 <View style={styles.employeeHeader}>
                   <View>
@@ -796,7 +1001,8 @@ export default function AdminEnhancedScreen() {
                   </View>
                 </View>
               </View>
-            ))}
+              ))
+            )}
           </View>
         )}
 
@@ -810,14 +1016,16 @@ export default function AdminEnhancedScreen() {
               <Text style={buttonStyles.primaryText}>Create Task</Text>
             </TouchableOpacity>
 
-            {tasks.length === 0 ? (
+            {filteredTasks.length === 0 ? (
               <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
                 <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                  No tasks created yet
+                  {searchQuery || Object.values(activeFilters).some(Boolean)
+                    ? 'No matching tasks'
+                    : 'No tasks created yet'}
                 </Text>
               </View>
             ) : (
-              tasks.map((task) => (
+              filteredTasks.map((task) => (
                 <View key={task.id} style={[styles.card, { backgroundColor: theme.card }]}>
                   <View style={styles.taskHeader}>
                     <Text style={[styles.cardTitle, { color: theme.text }]}>{task.title}</Text>
@@ -995,13 +1203,24 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 24,
     paddingBottom: 16,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    flex: 1,
+    marginRight: 12,
   },
   badge: {
     width: 32,
@@ -1015,9 +1234,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
+  realtimeIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  realtimeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#4CAF50',
+  },
+  realtimeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   tabsContainer: {
     paddingHorizontal: 16,
     marginBottom: 16,
+  },
+  searchContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
   tab: {
     paddingHorizontal: 20,
