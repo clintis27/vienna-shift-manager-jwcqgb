@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -56,6 +56,183 @@ export default function AdminEnhancedScreen() {
   const [taskPriority, setTaskPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
   const [taskDueDate, setTaskDueDate] = useState('');
 
+  const loadEmployees = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .order('first_name', { ascending: true });
+
+      if (error) throw error;
+
+      const mappedEmployees: Employee[] = (data || []).map(emp => ({
+        id: emp.id,
+        userId: emp.user_id,
+        email: emp.email,
+        firstName: emp.first_name,
+        lastName: emp.last_name,
+        role: emp.role,
+        category: emp.category,
+        department: emp.department,
+        phoneNumber: emp.phone_number,
+        avatarUrl: emp.avatar_url,
+        createdAt: emp.created_at,
+        updatedAt: emp.updated_at,
+      }));
+
+      setEmployees(mappedEmployees);
+    } catch (error) {
+      console.error('Error loading employees:', error);
+    }
+  }, []);
+
+  const loadLeaveRequests = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('leave_requests')
+        .select(`
+          *,
+          employee:employees(first_name, last_name, email)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const mappedRequests: LeaveRequest[] = (data || []).map(req => ({
+        id: req.id,
+        userId: req.employee_id,
+        userName: `${req.employee.first_name} ${req.employee.last_name}`,
+        startDate: req.start_date,
+        endDate: req.end_date,
+        type: req.leave_type,
+        status: req.status,
+        reason: req.reason,
+        createdAt: req.created_at,
+      }));
+
+      setLeaveRequests(mappedRequests);
+    } catch (error) {
+      console.error('Error loading leave requests:', error);
+    }
+  }, []);
+
+  const loadCertificates = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('sick_leave_certificates')
+        .select(`
+          *,
+          employee:employees(first_name, last_name, email)
+        `)
+        .order('uploaded_at', { ascending: false });
+
+      if (error) throw error;
+
+      const mappedCerts: SickLeaveCertificate[] = (data || []).map(cert => ({
+        id: cert.id,
+        employeeId: cert.employee_id,
+        fileName: cert.file_name,
+        filePath: cert.file_path,
+        fileSize: cert.file_size,
+        mimeType: cert.mime_type,
+        startDate: cert.start_date,
+        endDate: cert.end_date,
+        notes: cert.notes,
+        status: cert.status,
+        uploadedAt: cert.uploaded_at,
+        reviewedAt: cert.reviewed_at,
+        reviewedBy: cert.reviewed_by,
+      }));
+
+      setCertificates(mappedCerts);
+    } catch (error) {
+      console.error('Error loading certificates:', error);
+    }
+  }, []);
+
+  const loadDocuments = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select(`
+          *,
+          employee:employees(first_name, last_name, email)
+        `)
+        .order('uploaded_at', { ascending: false });
+
+      if (error) throw error;
+
+      const mappedDocs: Document[] = (data || []).map(doc => ({
+        id: doc.id,
+        employeeId: doc.employee_id,
+        documentType: doc.document_type,
+        fileName: doc.file_name,
+        filePath: doc.file_path,
+        fileSize: doc.file_size,
+        mimeType: doc.mime_type,
+        description: doc.description,
+        status: doc.status,
+        uploadedAt: doc.uploaded_at,
+        reviewedAt: doc.reviewed_at,
+        reviewedBy: doc.reviewed_by,
+      }));
+
+      setDocuments(mappedDocs);
+    } catch (error) {
+      console.error('Error loading documents:', error);
+    }
+  }, []);
+
+  const loadTasks = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select(`
+          *,
+          assigned_to_employee:employees!tasks_assigned_to_fkey(first_name, last_name)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const mappedTasks: Task[] = (data || []).map(task => ({
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        assignedTo: task.assigned_to,
+        assignedBy: task.assigned_by,
+        category: task.category,
+        priority: task.priority,
+        status: task.status,
+        dueDate: task.due_date,
+        completedAt: task.completed_at,
+        createdAt: task.created_at,
+        updatedAt: task.updated_at,
+      }));
+
+      setTasks(mappedTasks);
+    } catch (error) {
+      console.error('Error loading tasks:', error);
+    }
+  }, []);
+
+  const loadAllData = useCallback(async () => {
+    try {
+      setLoading(true);
+      await Promise.all([
+        loadEmployees(),
+        loadLeaveRequests(),
+        loadCertificates(),
+        loadDocuments(),
+        loadTasks(),
+      ]);
+    } catch (error) {
+      console.error('Error loading admin data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [loadEmployees, loadLeaveRequests, loadCertificates, loadDocuments, loadTasks]);
+
   // Real-time subscriptions for instant updates
   useRealtimeSubscription({
     table: 'employees',
@@ -106,184 +283,7 @@ export default function AdminEnhancedScreen() {
     if (user?.role === 'admin') {
       loadAllData();
     }
-  }, [user]);
-
-  const loadAllData = async () => {
-    try {
-      setLoading(true);
-      await Promise.all([
-        loadEmployees(),
-        loadLeaveRequests(),
-        loadCertificates(),
-        loadDocuments(),
-        loadTasks(),
-      ]);
-    } catch (error) {
-      console.error('Error loading admin data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadEmployees = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('employees')
-        .select('*')
-        .order('first_name', { ascending: true });
-
-      if (error) throw error;
-
-      const mappedEmployees: Employee[] = (data || []).map(emp => ({
-        id: emp.id,
-        userId: emp.user_id,
-        email: emp.email,
-        firstName: emp.first_name,
-        lastName: emp.last_name,
-        role: emp.role,
-        category: emp.category,
-        department: emp.department,
-        phoneNumber: emp.phone_number,
-        avatarUrl: emp.avatar_url,
-        createdAt: emp.created_at,
-        updatedAt: emp.updated_at,
-      }));
-
-      setEmployees(mappedEmployees);
-    } catch (error) {
-      console.error('Error loading employees:', error);
-    }
-  };
-
-  const loadLeaveRequests = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('leave_requests')
-        .select(`
-          *,
-          employee:employees(first_name, last_name, email)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const mappedRequests: LeaveRequest[] = (data || []).map(req => ({
-        id: req.id,
-        userId: req.employee_id,
-        userName: `${req.employee.first_name} ${req.employee.last_name}`,
-        startDate: req.start_date,
-        endDate: req.end_date,
-        type: req.leave_type,
-        status: req.status,
-        reason: req.reason,
-        createdAt: req.created_at,
-      }));
-
-      setLeaveRequests(mappedRequests);
-    } catch (error) {
-      console.error('Error loading leave requests:', error);
-    }
-  };
-
-  const loadCertificates = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('sick_leave_certificates')
-        .select(`
-          *,
-          employee:employees(first_name, last_name, email)
-        `)
-        .order('uploaded_at', { ascending: false });
-
-      if (error) throw error;
-
-      const mappedCerts: SickLeaveCertificate[] = (data || []).map(cert => ({
-        id: cert.id,
-        employeeId: cert.employee_id,
-        fileName: cert.file_name,
-        filePath: cert.file_path,
-        fileSize: cert.file_size,
-        mimeType: cert.mime_type,
-        startDate: cert.start_date,
-        endDate: cert.end_date,
-        notes: cert.notes,
-        status: cert.status,
-        uploadedAt: cert.uploaded_at,
-        reviewedAt: cert.reviewed_at,
-        reviewedBy: cert.reviewed_by,
-      }));
-
-      setCertificates(mappedCerts);
-    } catch (error) {
-      console.error('Error loading certificates:', error);
-    }
-  };
-
-  const loadDocuments = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('documents')
-        .select(`
-          *,
-          employee:employees(first_name, last_name, email)
-        `)
-        .order('uploaded_at', { ascending: false });
-
-      if (error) throw error;
-
-      const mappedDocs: Document[] = (data || []).map(doc => ({
-        id: doc.id,
-        employeeId: doc.employee_id,
-        documentType: doc.document_type,
-        fileName: doc.file_name,
-        filePath: doc.file_path,
-        fileSize: doc.file_size,
-        mimeType: doc.mime_type,
-        description: doc.description,
-        status: doc.status,
-        uploadedAt: doc.uploaded_at,
-        reviewedAt: doc.reviewed_at,
-        reviewedBy: doc.reviewed_by,
-      }));
-
-      setDocuments(mappedDocs);
-    } catch (error) {
-      console.error('Error loading documents:', error);
-    }
-  };
-
-  const loadTasks = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select(`
-          *,
-          assigned_to_employee:employees!tasks_assigned_to_fkey(first_name, last_name)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const mappedTasks: Task[] = (data || []).map(task => ({
-        id: task.id,
-        title: task.title,
-        description: task.description,
-        assignedTo: task.assigned_to,
-        assignedBy: task.assigned_by,
-        category: task.category,
-        priority: task.priority,
-        status: task.status,
-        dueDate: task.due_date,
-        completedAt: task.completed_at,
-        createdAt: task.created_at,
-        updatedAt: task.updated_at,
-      }));
-
-      setTasks(mappedTasks);
-    } catch (error) {
-      console.error('Error loading tasks:', error);
-    }
-  };
+  }, [user, loadAllData]);
 
   const handleApproveLeave = async (requestId: string) => {
     try {
@@ -469,7 +469,7 @@ export default function AdminEnhancedScreen() {
   };
 
   // Filter data based on search and filters
-  const filterData = <T extends any>(data: T[], searchFields: string[]): T[] => {
+  const filterData = <T,>(data: T[], searchFields: string[]): T[] => {
     let filtered = data;
 
     // Apply search

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -28,11 +28,7 @@ export default function TasksScreen() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'in-progress' | 'completed'>('all');
 
-  useEffect(() => {
-    loadTasks();
-  }, [user]);
-
-  const loadTasks = async () => {
+  const loadTasks = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -81,7 +77,11 @@ export default function TasksScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
 
   const handleUpdateTaskStatus = async (taskId: string, newStatus: Task['status']) => {
     try {

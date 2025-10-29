@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -57,15 +57,7 @@ export default function ProfileScreen() {
   const [endDate, setEndDate] = useState('');
   const [notes, setNotes] = useState('');
 
-  useEffect(() => {
-    if (user) {
-      setNotificationPrefs(user.notificationPreferences || notificationPrefs);
-      loadUserDocuments();
-      loadCertificates();
-    }
-  }, [user]);
-
-  const loadUserDocuments = async () => {
+  const loadUserDocuments = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -104,9 +96,9 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error('Error loading documents:', error);
     }
-  };
+  }, [user]);
 
-  const loadCertificates = async () => {
+  const loadCertificates = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -146,7 +138,15 @@ export default function ProfileScreen() {
     } catch (error) {
       console.error('Error loading certificates:', error);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      setNotificationPrefs(user.notificationPreferences || notificationPrefs);
+      loadUserDocuments();
+      loadCertificates();
+    }
+  }, [user, loadUserDocuments, loadCertificates]);
 
   const handleNotificationPrefChange = async (
     key: keyof NotificationPreferences,

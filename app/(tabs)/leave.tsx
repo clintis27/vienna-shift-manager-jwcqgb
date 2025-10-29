@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -40,15 +40,7 @@ export default function LeaveScreen() {
   const [reason, setReason] = useState('');
   const [markedDates, setMarkedDates] = useState<any>({});
 
-  useEffect(() => {
-    loadLeaveRequests();
-  }, [user]);
-
-  useEffect(() => {
-    updateMarkedDates();
-  }, [leaveRequests, startDate, endDate]);
-
-  const loadLeaveRequests = async () => {
+  const loadLeaveRequests = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -91,9 +83,9 @@ export default function LeaveScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  const updateMarkedDates = () => {
+  const updateMarkedDates = useCallback(() => {
     const marked: any = {};
 
     // Mark approved leave days
@@ -154,7 +146,15 @@ export default function LeaveScreen() {
     }
 
     setMarkedDates(marked);
-  };
+  }, [leaveRequests, startDate, endDate, theme.primary]);
+
+  useEffect(() => {
+    loadLeaveRequests();
+  }, [loadLeaveRequests]);
+
+  useEffect(() => {
+    updateMarkedDates();
+  }, [updateMarkedDates]);
 
   const handleDayPress = (day: DateData) => {
     if (!startDate || (startDate && endDate)) {
