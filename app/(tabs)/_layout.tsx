@@ -36,34 +36,28 @@ export default function TabLayout() {
       route: '/(tabs)/schedule',
     },
     {
-      name: 'availability',
-      title: 'Availability',
-      icon: 'calendar.badge.plus',
-      route: '/(tabs)/availability',
+      name: 'leave',
+      title: 'Leave',
+      icon: 'calendar.badge.clock',
+      route: '/(tabs)/leave',
+    },
+    {
+      name: 'tasks',
+      title: 'Tasks',
+      icon: 'checkmark.circle',
+      route: '/(tabs)/tasks',
     },
     ...(isAdmin ? [{
-      name: 'admin',
+      name: 'admin-enhanced',
       title: 'Admin',
       icon: 'person.2',
-      route: '/(tabs)/admin',
+      route: '/(tabs)/admin-enhanced',
     }] : []),
     {
       name: 'time-tracking',
       title: 'Time',
       icon: 'clock',
       route: '/(tabs)/time-tracking',
-    },
-    {
-      name: 'notifications',
-      title: 'Notifications',
-      icon: 'bell',
-      route: '/(tabs)/notifications',
-    },
-    {
-      name: 'reports',
-      title: 'Reports',
-      icon: 'doc.text',
-      route: '/(tabs)/reports',
     },
     {
       name: 'profile',
@@ -97,6 +91,20 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="leave"
+          options={{
+            title: 'Leave',
+            tabBarIcon: ({ color }) => <IconSymbol name="calendar.badge.clock" size={24} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="tasks"
+          options={{
+            title: 'Tasks',
+            tabBarIcon: ({ color }) => <IconSymbol name="checkmark.circle" size={24} color={color} />,
+          }}
+        />
+        <Tabs.Screen
           name="availability"
           options={{
             title: 'Availability',
@@ -104,13 +112,22 @@ export default function TabLayout() {
           }}
         />
         {isAdmin && (
-          <Tabs.Screen
-            name="admin"
-            options={{
-              title: 'Admin',
-              tabBarIcon: ({ color }) => <IconSymbol name="person.2" size={24} color={color} />,
-            }}
-          />
+          <>
+            <Tabs.Screen
+              name="admin"
+              options={{
+                title: 'Admin (Old)',
+                tabBarIcon: ({ color }) => <IconSymbol name="person.2" size={24} color={color} />,
+              }}
+            />
+            <Tabs.Screen
+              name="admin-enhanced"
+              options={{
+                title: 'Admin',
+                tabBarIcon: ({ color }) => <IconSymbol name="person.2" size={24} color={color} />,
+              }}
+            />
+          </>
         )}
         <Tabs.Screen
           name="time-tracking"
@@ -154,8 +171,15 @@ export default function TabLayout() {
       >
         <Tabs.Screen name="(home)" />
         <Tabs.Screen name="schedule" />
+        <Tabs.Screen name="leave" />
+        <Tabs.Screen name="tasks" />
         <Tabs.Screen name="availability" />
-        {isAdmin && <Tabs.Screen name="admin" />}
+        {isAdmin && (
+          <>
+            <Tabs.Screen name="admin" />
+            <Tabs.Screen name="admin-enhanced" />
+          </>
+        )}
         <Tabs.Screen name="time-tracking" />
         <Tabs.Screen name="notifications" />
         <Tabs.Screen name="reports" />

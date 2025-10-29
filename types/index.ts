@@ -153,3 +153,33 @@ export interface Employee {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  assignedTo: string;
+  assignedBy: string;
+  category?: EmployeeCategory;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'pending' | 'in-progress' | 'completed' | 'cancelled';
+  dueDate?: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Document {
+  id: string;
+  employeeId: string;
+  documentType: 'certificate' | 'contract' | 'id' | 'other';
+  fileName: string;
+  filePath: string;
+  fileSize?: number;
+  mimeType?: string;
+  description?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  uploadedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
