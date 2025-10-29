@@ -8,7 +8,7 @@ export interface User {
   firstName: string;
   lastName: string;
   role: 'admin' | 'manager' | 'employee';
-  category?: EmployeeCategory; // Category for employees and category-specific admins
+  category?: EmployeeCategory;
   department?: string;
   phoneNumber?: string;
   avatar?: string;
@@ -28,7 +28,7 @@ export interface Shift {
   userId: string;
   userName: string;
   department: string;
-  category: EmployeeCategory; // Added category to shifts
+  category: EmployeeCategory;
   startTime: string;
   endTime: string;
   date: string;
@@ -109,7 +109,7 @@ export interface MonthlyReport {
   id: string;
   userId: string;
   userName: string;
-  month: string; // Format: YYYY-MM
+  month: string;
   year: number;
   totalHours: number;
   shiftsCompleted: number;

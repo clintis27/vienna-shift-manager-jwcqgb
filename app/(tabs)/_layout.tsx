@@ -1,190 +1,127 @@
 
-import React, { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
+import React from 'react';
+import { Platform } from 'react-native';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
-import FloatingTabBar from '@/components/FloatingTabBar';
-import { getUser } from '@/utils/storage';
-import { User } from '@/types';
+import { colors, darkColors } from '@/styles/commonStyles';
+import { useColorScheme } from 'react-native';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function TabLayout() {
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    loadUser();
-  }, []);
-
-  const loadUser = async () => {
-    const userData = await getUser();
-    setUser(userData);
-  };
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const theme = isDark ? darkColors : colors;
+  const { user } = useAuth();
 
   const isAdmin = user?.role === 'admin';
 
-  const tabs = [
-    {
-      name: '(home)',
-      title: 'Home',
-      icon: 'house',
-      route: '/(tabs)/(home)',
-    },
-    {
-      name: 'schedule',
-      title: 'Schedule',
-      icon: 'calendar',
-      route: '/(tabs)/schedule',
-    },
-    {
-      name: 'leave',
-      title: 'Leave',
-      icon: 'calendar.badge.clock',
-      route: '/(tabs)/leave',
-    },
-    {
-      name: 'tasks',
-      title: 'Tasks',
-      icon: 'checkmark.circle',
-      route: '/(tabs)/tasks',
-    },
-    ...(isAdmin ? [{
-      name: 'admin-enhanced',
-      title: 'Admin',
-      icon: 'person.2',
-      route: '/(tabs)/admin-enhanced',
-    }] : []),
-    {
-      name: 'time-tracking',
-      title: 'Time',
-      icon: 'clock',
-      route: '/(tabs)/time-tracking',
-    },
-    {
-      name: 'profile',
-      title: 'Profile',
-      icon: 'person',
-      route: '/(tabs)/profile',
-    },
-  ];
-
-  if (Platform.OS === 'web') {
-    return (
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.text,
-        }}
-      >
-        <Tabs.Screen
-          name="(home)"
-          options={{
-            title: 'Home',
-            tabBarIcon: ({ color }) => <IconSymbol name="house" size={24} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="schedule"
-          options={{
-            title: 'Schedule',
-            tabBarIcon: ({ color }) => <IconSymbol name="calendar" size={24} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="leave"
-          options={{
-            title: 'Leave',
-            tabBarIcon: ({ color }) => <IconSymbol name="calendar.badge.clock" size={24} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="tasks"
-          options={{
-            title: 'Tasks',
-            tabBarIcon: ({ color }) => <IconSymbol name="checkmark.circle" size={24} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="availability"
-          options={{
-            title: 'Availability',
-            tabBarIcon: ({ color }) => <IconSymbol name="calendar.badge.plus" size={24} color={color} />,
-          }}
-        />
-        {isAdmin && (
-          <>
-            <Tabs.Screen
-              name="admin"
-              options={{
-                title: 'Admin (Old)',
-                tabBarIcon: ({ color }) => <IconSymbol name="person.2" size={24} color={color} />,
-              }}
-            />
-            <Tabs.Screen
-              name="admin-enhanced"
-              options={{
-                title: 'Admin',
-                tabBarIcon: ({ color }) => <IconSymbol name="person.2" size={24} color={color} />,
-              }}
-            />
-          </>
-        )}
-        <Tabs.Screen
-          name="time-tracking"
-          options={{
-            title: 'Time',
-            tabBarIcon: ({ color }) => <IconSymbol name="clock" size={24} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="notifications"
-          options={{
-            title: 'Notifications',
-            tabBarIcon: ({ color }) => <IconSymbol name="bell" size={24} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="reports"
-          options={{
-            title: 'Reports',
-            tabBarIcon: ({ color }) => <IconSymbol name="doc.text" size={24} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: 'Profile',
-            tabBarIcon: ({ color }) => <IconSymbol name="person" size={24} color={color} />,
-          }}
-        />
-      </Tabs>
-    );
-  }
-
   return (
-    <>
-      <Tabs
-        screenOptions={{
-          headerShown: false,
+    <Tabs
+      screenOptions={{
+        tabBarActiveTintColor: theme.primary,
+        tabBarInactiveTintColor: theme.textSecondary,
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: theme.card,
+          borderTopColor: theme.border,
+          height: Platform.OS === 'ios' ? 88 : 64,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
+      }}
+    >
+      <Tabs.Screen
+        name="(home)"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
         }}
-        tabBar={() => <FloatingTabBar tabs={tabs} />}
-      >
-        <Tabs.Screen name="(home)" />
-        <Tabs.Screen name="schedule" />
-        <Tabs.Screen name="leave" />
-        <Tabs.Screen name="tasks" />
-        <Tabs.Screen name="availability" />
-        {isAdmin && (
-          <>
-            <Tabs.Screen name="admin" />
-            <Tabs.Screen name="admin-enhanced" />
-          </>
-        )}
-        <Tabs.Screen name="time-tracking" />
-        <Tabs.Screen name="notifications" />
-        <Tabs.Screen name="reports" />
-        <Tabs.Screen name="profile" />
-      </Tabs>
-    </>
+      />
+      <Tabs.Screen
+        name="schedule"
+        options={{
+          title: 'Schedule',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="leave"
+        options={{
+          title: 'Leave',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar.badge.clock" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="ai-assistant"
+        options={{
+          title: 'AI Assistant',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="sparkles" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="time-tracking"
+        options={{
+          title: 'Time',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="clock.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="tasks"
+        options={{
+          title: 'Tasks',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="checklist" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="availability"
+        options={{
+          title: 'Availability',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar.badge.plus" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: 'Notifications',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="bell.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="reports"
+        options={{
+          title: 'Reports',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
+        }}
+      />
+      {isAdmin && (
+        <>
+          <Tabs.Screen
+            name="admin"
+            options={{
+              title: 'Admin',
+              tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.3.fill" color={color} />,
+            }}
+          />
+          <Tabs.Screen
+            name="admin-enhanced"
+            options={{
+              title: 'Dashboard',
+              tabBarIcon: ({ color }) => <IconSymbol size={28} name="square.grid.2x2.fill" color={color} />,
+            }}
+          />
+        </>
+      )}
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+        }}
+      />
+    </Tabs>
   );
 }

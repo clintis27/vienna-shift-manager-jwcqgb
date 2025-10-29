@@ -12,17 +12,18 @@ import {
   TextInput,
   Modal,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, darkColors, buttonStyles } from '@/styles/commonStyles';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/app/integrations/supabase/client';
-import { Employee, LeaveRequest, Task, SickLeaveCertificate } from '@/types';
+import { Employee, LeaveRequest, Task, SickLeaveCertificate, Document } from '@/types';
 import { formatDate } from '@/utils/dateHelpers';
 import { getCategoryName, getCategoryColor } from '@/utils/mockData';
 
-type TabType = 'pending' | 'employees' | 'tasks' | 'documents';
+type TabType = 'overview' | 'leave' | 'documents' | 'employees' | 'tasks';
 
 export default function AdminEnhancedScreen() {
   const { user } = useAuth();
@@ -30,13 +31,14 @@ export default function AdminEnhancedScreen() {
   const isDark = colorScheme === 'dark';
   const theme = isDark ? darkColors : colors;
 
-  const [activeTab, setActiveTab] = useState<TabType>('pending');
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [loading, setLoading] = useState(true);
   
   // Data states
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [certificates, setCertificates] = useState<SickLeaveCertificate[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
 
   // Task creation modal
@@ -60,6 +62,7 @@ export default function AdminEnhancedScreen() {
         loadEmployees(),
         loadLeaveRequests(),
         loadCertificates(),
+        loadDocuments(),
         loadTasks(),
       ]);
     } catch (error) {
@@ -107,7 +110,6 @@ export default function AdminEnhancedScreen() {
           *,
           employee:employees(first_name, last_name, email)
         `)
-        .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -138,7 +140,6 @@ export default function AdminEnhancedScreen() {
           *,
           employee:employees(first_name, last_name, email)
         `)
-        .eq('status', 'pending')
         .order('uploaded_at', { ascending: false });
 
       if (error) throw error;
@@ -162,6 +163,39 @@ export default function AdminEnhancedScreen() {
       setCertificates(mappedCerts);
     } catch (error) {
       console.error('Error loading certificates:', error);
+    }
+  };
+
+  const loadDocuments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('documents')
+        .select(`
+          *,
+          employee:employees(first_name, last_name, email)
+        `)
+        .order('uploaded_at', { ascending: false });
+
+      if (error) throw error;
+
+      const mappedDocs: Document[] = (data || []).map(doc => ({
+        id: doc.id,
+        employeeId: doc.employee_id,
+        documentType: doc.document_type,
+        fileName: doc.file_name,
+        filePath: doc.file_path,
+        fileSize: doc.file_size,
+        mimeType: doc.mime_type,
+        description: doc.description,
+        status: doc.status,
+        uploadedAt: doc.uploaded_at,
+        reviewedAt: doc.reviewed_at,
+        reviewedBy: doc.reviewed_by,
+      }));
+
+      setDocuments(mappedDocs);
+    } catch (error) {
+      console.error('Error loading documents:', error);
     }
   };
 
@@ -252,7 +286,7 @@ export default function AdminEnhancedScreen() {
     }
   };
 
-  const handleApproveCertificate = async (certId: string) => {
+  const handleApproveDocument = async (docId: string, type: 'certificate' | 'document') => {
     try {
       const { data: empData } = await supabase
         .from('employees')
@@ -260,26 +294,32 @@ export default function AdminEnhancedScreen() {
         .eq('user_id', user?.id)
         .single();
 
+      const table = type === 'certificate' ? 'sick_leave_certificates' : 'documents';
+
       const { error } = await supabase
-        .from('sick_leave_certificates')
+        .from(table)
         .update({
           status: 'approved',
           reviewed_by: empData?.id,
           reviewed_at: new Date().toISOString(),
         })
-        .eq('id', certId);
+        .eq('id', docId);
 
       if (error) throw error;
 
-      Alert.alert('Success', 'Certificate approved');
-      await loadCertificates();
+      Alert.alert('Success', `${type === 'certificate' ? 'Certificate' : 'Document'} approved`);
+      if (type === 'certificate') {
+        await loadCertificates();
+      } else {
+        await loadDocuments();
+      }
     } catch (error) {
-      console.error('Error approving certificate:', error);
-      Alert.alert('Error', 'Failed to approve certificate');
+      console.error('Error approving document:', error);
+      Alert.alert('Error', 'Failed to approve document');
     }
   };
 
-  const handleRejectCertificate = async (certId: string) => {
+  const handleRejectDocument = async (docId: string, type: 'certificate' | 'document') => {
     try {
       const { data: empData } = await supabase
         .from('employees')
@@ -287,22 +327,45 @@ export default function AdminEnhancedScreen() {
         .eq('user_id', user?.id)
         .single();
 
+      const table = type === 'certificate' ? 'sick_leave_certificates' : 'documents';
+
       const { error } = await supabase
-        .from('sick_leave_certificates')
+        .from(table)
         .update({
           status: 'rejected',
           reviewed_by: empData?.id,
           reviewed_at: new Date().toISOString(),
         })
-        .eq('id', certId);
+        .eq('id', docId);
 
       if (error) throw error;
 
-      Alert.alert('Success', 'Certificate rejected');
-      await loadCertificates();
+      Alert.alert('Success', `${type === 'certificate' ? 'Certificate' : 'Document'} rejected`);
+      if (type === 'certificate') {
+        await loadCertificates();
+      } else {
+        await loadDocuments();
+      }
     } catch (error) {
-      console.error('Error rejecting certificate:', error);
-      Alert.alert('Error', 'Failed to reject certificate');
+      console.error('Error rejecting document:', error);
+      Alert.alert('Error', 'Failed to reject document');
+    }
+  };
+
+  const handleViewDocument = async (filePath: string, bucket: string) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(filePath, 3600);
+
+      if (error) throw error;
+
+      if (data?.signedUrl) {
+        await Linking.openURL(data.signedUrl);
+      }
+    } catch (error) {
+      console.error('Error viewing document:', error);
+      Alert.alert('Error', 'Failed to open document');
     }
   };
 
@@ -352,7 +415,10 @@ export default function AdminEnhancedScreen() {
     setTaskDueDate('');
   };
 
-  const pendingCount = leaveRequests.length + certificates.length;
+  const pendingLeaveCount = leaveRequests.filter(r => r.status === 'pending').length;
+  const pendingCertCount = certificates.filter(c => c.status === 'pending').length;
+  const pendingDocCount = documents.filter(d => d.status === 'pending').length;
+  const totalPending = pendingLeaveCount + pendingCertCount + pendingDocCount;
 
   if (loading) {
     return (
@@ -369,7 +435,7 @@ export default function AdminEnhancedScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.errorContainer}>
-          <IconSymbol name="exclamationmark.triangle" size={48} color={theme.error} />
+          <IconSymbol name="exclamationmark.triangle" size={48} color="#FF6B6B" />
           <Text style={[styles.errorText, { color: theme.text }]}>Access Denied</Text>
         </View>
       </SafeAreaView>
@@ -381,9 +447,9 @@ export default function AdminEnhancedScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.text }]}>Admin Dashboard</Text>
-        {pendingCount > 0 && (
+        {totalPending > 0 && (
           <View style={[styles.badge, { backgroundColor: '#FF6B6B' }]}>
-            <Text style={styles.badgeText}>{pendingCount}</Text>
+            <Text style={styles.badgeText}>{totalPending}</Text>
           </View>
         )}
       </View>
@@ -394,16 +460,50 @@ export default function AdminEnhancedScreen() {
           style={[
             styles.tab,
             { backgroundColor: theme.card, borderColor: theme.border },
-            activeTab === 'pending' && { backgroundColor: theme.primary, borderColor: theme.primary }
+            activeTab === 'overview' && { backgroundColor: theme.primary, borderColor: theme.primary }
           ]}
-          onPress={() => setActiveTab('pending')}
+          onPress={() => setActiveTab('overview')}
         >
           <Text style={[
             styles.tabText,
             { color: theme.text },
-            activeTab === 'pending' && { color: '#FFFFFF', fontWeight: '600' }
+            activeTab === 'overview' && { color: '#FFFFFF', fontWeight: '600' }
           ]}>
-            Pending ({pendingCount})
+            Overview
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            { backgroundColor: theme.card, borderColor: theme.border },
+            activeTab === 'leave' && { backgroundColor: theme.primary, borderColor: theme.primary }
+          ]}
+          onPress={() => setActiveTab('leave')}
+        >
+          <Text style={[
+            styles.tabText,
+            { color: theme.text },
+            activeTab === 'leave' && { color: '#FFFFFF', fontWeight: '600' }
+          ]}>
+            Leave ({pendingLeaveCount})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            { backgroundColor: theme.card, borderColor: theme.border },
+            activeTab === 'documents' && { backgroundColor: theme.primary, borderColor: theme.primary }
+          ]}
+          onPress={() => setActiveTab('documents')}
+        >
+          <Text style={[
+            styles.tabText,
+            { color: theme.text },
+            activeTab === 'documents' && { color: '#FFFFFF', fontWeight: '600' }
+          ]}>
+            Documents ({pendingCertCount + pendingDocCount})
           </Text>
         </TouchableOpacity>
 
@@ -444,20 +544,93 @@ export default function AdminEnhancedScreen() {
 
       {/* Content */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {activeTab === 'pending' && (
+        {activeTab === 'overview' && (
           <View style={styles.section}>
-            {/* Leave Requests */}
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>Leave Requests</Text>
+            {/* Stats Cards */}
+            <View style={styles.statsGrid}>
+              <View style={[styles.statCard, { backgroundColor: theme.card }]}>
+                <IconSymbol name="person.3.fill" size={32} color={theme.primary} />
+                <Text style={[styles.statNumber, { color: theme.text }]}>{employees.length}</Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Employees</Text>
+              </View>
+
+              <View style={[styles.statCard, { backgroundColor: theme.card }]}>
+                <IconSymbol name="clock.badge.exclamationmark" size={32} color="#FFA726" />
+                <Text style={[styles.statNumber, { color: theme.text }]}>{totalPending}</Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Pending</Text>
+              </View>
+
+              <View style={[styles.statCard, { backgroundColor: theme.card }]}>
+                <IconSymbol name="checkmark.circle.fill" size={32} color="#4CAF50" />
+                <Text style={[styles.statNumber, { color: theme.text }]}>
+                  {leaveRequests.filter(r => r.status === 'approved').length}
+                </Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Approved</Text>
+              </View>
+
+              <View style={[styles.statCard, { backgroundColor: theme.card }]}>
+                <IconSymbol name="checklist" size={32} color="#2196F3" />
+                <Text style={[styles.statNumber, { color: theme.text }]}>{tasks.length}</Text>
+                <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Tasks</Text>
+              </View>
+            </View>
+
+            {/* Recent Activity */}
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Activity</Text>
+            
+            {pendingLeaveCount > 0 && (
+              <View style={[styles.activityCard, { backgroundColor: theme.card }]}>
+                <IconSymbol name="calendar.badge.clock" size={24} color="#FFA726" />
+                <View style={styles.activityContent}>
+                  <Text style={[styles.activityTitle, { color: theme.text }]}>
+                    {pendingLeaveCount} Pending Leave Request{pendingLeaveCount > 1 ? 's' : ''}
+                  </Text>
+                  <Text style={[styles.activitySubtitle, { color: theme.textSecondary }]}>
+                    Requires your review
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setActiveTab('leave')}>
+                  <IconSymbol name="chevron.right" size={20} color={theme.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {(pendingCertCount + pendingDocCount) > 0 && (
+              <View style={[styles.activityCard, { backgroundColor: theme.card }]}>
+                <IconSymbol name="doc.badge.plus" size={24} color="#FFA726" />
+                <View style={styles.activityContent}>
+                  <Text style={[styles.activityTitle, { color: theme.text }]}>
+                    {pendingCertCount + pendingDocCount} Pending Document{(pendingCertCount + pendingDocCount) > 1 ? 's' : ''}
+                  </Text>
+                  <Text style={[styles.activitySubtitle, { color: theme.textSecondary }]}>
+                    Requires your review
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setActiveTab('documents')}>
+                  <IconSymbol name="chevron.right" size={20} color={theme.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {activeTab === 'leave' && (
+          <View style={styles.section}>
             {leaveRequests.length === 0 ? (
               <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
                 <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                  No pending leave requests
+                  No leave requests
                 </Text>
               </View>
             ) : (
               leaveRequests.map((request) => (
                 <View key={request.id} style={[styles.card, { backgroundColor: theme.card }]}>
-                  <Text style={[styles.cardTitle, { color: theme.text }]}>{request.userName}</Text>
+                  <View style={styles.cardHeader}>
+                    <Text style={[styles.cardTitle, { color: theme.text }]}>{request.userName}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(request.status) }]}>
+                      <Text style={styles.statusText}>{request.status}</Text>
+                    </View>
+                  </View>
                   <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>
                     {request.type.toUpperCase()} Leave
                   </Text>
@@ -469,65 +642,131 @@ export default function AdminEnhancedScreen() {
                       {request.reason}
                     </Text>
                   )}
-                  <View style={styles.cardActions}>
-                    <TouchableOpacity
-                      style={[buttonStyles.secondary, styles.actionBtn, { borderColor: '#FF6B6B' }]}
-                      onPress={() => handleRejectLeave(request.id)}
-                    >
-                      <Text style={[buttonStyles.secondaryText, { color: '#FF6B6B' }]}>Reject</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[buttonStyles.primary, styles.actionBtn, { backgroundColor: '#4CAF50' }]}
-                      onPress={() => handleApproveLeave(request.id)}
-                    >
-                      <Text style={buttonStyles.primaryText}>Approve</Text>
-                    </TouchableOpacity>
-                  </View>
+                  {request.status === 'pending' && (
+                    <View style={styles.cardActions}>
+                      <TouchableOpacity
+                        style={[buttonStyles.secondary, styles.actionBtn, { borderColor: '#FF6B6B' }]}
+                        onPress={() => handleRejectLeave(request.id)}
+                      >
+                        <Text style={[buttonStyles.secondaryText, { color: '#FF6B6B' }]}>Reject</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[buttonStyles.primary, styles.actionBtn, { backgroundColor: '#4CAF50' }]}
+                        onPress={() => handleApproveLeave(request.id)}
+                      >
+                        <Text style={buttonStyles.primaryText}>Approve</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               ))
             )}
+          </View>
+        )}
 
-            {/* Certificates */}
-            <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 24 }]}>
-              Sick Leave Certificates
-            </Text>
+        {activeTab === 'documents' && (
+          <View style={styles.section}>
+            {/* Sick Leave Certificates */}
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Sick Leave Certificates</Text>
             {certificates.length === 0 ? (
               <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
                 <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                  No pending certificates
+                  No certificates uploaded
                 </Text>
               </View>
             ) : (
               certificates.map((cert) => (
                 <View key={cert.id} style={[styles.card, { backgroundColor: theme.card }]}>
-                  <Text style={[styles.cardTitle, { color: theme.text }]}>
-                    Sick Leave Certificate
-                  </Text>
+                  <View style={styles.cardHeader}>
+                    <Text style={[styles.cardTitle, { color: theme.text }]}>
+                      Sick Leave Certificate
+                    </Text>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(cert.status) }]}>
+                      <Text style={styles.statusText}>{cert.status}</Text>
+                    </View>
+                  </View>
                   <Text style={[styles.cardText, { color: theme.textSecondary }]}>
                     {formatDate(cert.startDate)} - {formatDate(cert.endDate)}
                   </Text>
-                  <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>
-                    {cert.fileName}
-                  </Text>
+                  <TouchableOpacity
+                    style={styles.fileLink}
+                    onPress={() => handleViewDocument(cert.filePath, 'sick-leave-certificates')}
+                  >
+                    <IconSymbol name="doc" size={16} color={theme.primary} />
+                    <Text style={[styles.fileName, { color: theme.primary }]}>{cert.fileName}</Text>
+                  </TouchableOpacity>
                   {cert.notes && (
                     <Text style={[styles.cardReason, { color: theme.textSecondary }]}>
                       {cert.notes}
                     </Text>
                   )}
-                  <View style={styles.cardActions}>
-                    <TouchableOpacity
-                      style={[buttonStyles.secondary, styles.actionBtn, { borderColor: '#FF6B6B' }]}
-                      onPress={() => handleRejectCertificate(cert.id)}
-                    >
-                      <Text style={[buttonStyles.secondaryText, { color: '#FF6B6B' }]}>Reject</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[buttonStyles.primary, styles.actionBtn, { backgroundColor: '#4CAF50' }]}
-                      onPress={() => handleApproveCertificate(cert.id)}
-                    >
-                      <Text style={buttonStyles.primaryText}>Approve</Text>
-                    </TouchableOpacity>
+                  {cert.status === 'pending' && (
+                    <View style={styles.cardActions}>
+                      <TouchableOpacity
+                        style={[buttonStyles.secondary, styles.actionBtn, { borderColor: '#FF6B6B' }]}
+                        onPress={() => handleRejectDocument(cert.id, 'certificate')}
+                      >
+                        <Text style={[buttonStyles.secondaryText, { color: '#FF6B6B' }]}>Reject</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[buttonStyles.primary, styles.actionBtn, { backgroundColor: '#4CAF50' }]}
+                        onPress={() => handleApproveDocument(cert.id, 'certificate')}
+                      >
+                        <Text style={buttonStyles.primaryText}>Approve</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
+
+            {/* General Documents */}
+            <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 24 }]}>General Documents</Text>
+            {documents.length === 0 ? (
+              <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
+                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                  No documents uploaded
+                </Text>
+              </View>
+            ) : (
+              documents.map((doc) => (
+                <View key={doc.id} style={[styles.card, { backgroundColor: theme.card }]}>
+                  <View style={styles.cardHeader}>
+                    <Text style={[styles.cardTitle, { color: theme.text }]}>
+                      {doc.documentType.toUpperCase()}
+                    </Text>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(doc.status) }]}>
+                      <Text style={styles.statusText}>{doc.status}</Text>
+                    </View>
                   </View>
+                  <TouchableOpacity
+                    style={styles.fileLink}
+                    onPress={() => handleViewDocument(doc.filePath, 'documents')}
+                  >
+                    <IconSymbol name="doc" size={16} color={theme.primary} />
+                    <Text style={[styles.fileName, { color: theme.primary }]}>{doc.fileName}</Text>
+                  </TouchableOpacity>
+                  {doc.description && (
+                    <Text style={[styles.cardReason, { color: theme.textSecondary }]}>
+                      {doc.description}
+                    </Text>
+                  )}
+                  {doc.status === 'pending' && (
+                    <View style={styles.cardActions}>
+                      <TouchableOpacity
+                        style={[buttonStyles.secondary, styles.actionBtn, { borderColor: '#FF6B6B' }]}
+                        onPress={() => handleRejectDocument(doc.id, 'document')}
+                      >
+                        <Text style={[buttonStyles.secondaryText, { color: '#FF6B6B' }]}>Reject</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[buttonStyles.primary, styles.actionBtn, { backgroundColor: '#4CAF50' }]}
+                        onPress={() => handleApproveDocument(doc.id, 'document')}
+                      >
+                        <Text style={buttonStyles.primaryText}>Approve</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               ))
             )}
@@ -619,14 +858,27 @@ export default function AdminEnhancedScreen() {
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               <Text style={[styles.label, { color: theme.text }]}>Assign To *</Text>
-              <TouchableOpacity
-                style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border }]}
-                onPress={() => {/* Show employee selector */}}
-              >
-                <Text style={[styles.inputText, { color: selectedEmployee ? theme.text : theme.textSecondary }]}>
-                  {selectedEmployee ? `${selectedEmployee.firstName} ${selectedEmployee.lastName}` : 'Select Employee'}
-                </Text>
-              </TouchableOpacity>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.employeeSelector}>
+                {employees.map((emp) => (
+                  <TouchableOpacity
+                    key={emp.id}
+                    style={[
+                      styles.employeeChip,
+                      { backgroundColor: theme.background, borderColor: theme.border },
+                      selectedEmployee?.id === emp.id && { borderColor: theme.primary, borderWidth: 2 }
+                    ]}
+                    onPress={() => setSelectedEmployee(emp)}
+                  >
+                    <Text style={[
+                      styles.employeeChipText,
+                      { color: theme.text },
+                      selectedEmployee?.id === emp.id && { color: theme.primary, fontWeight: '600' }
+                    ]}>
+                      {emp.firstName} {emp.lastName}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
 
               <Text style={[styles.label, { color: theme.text }]}>Task Title *</Text>
               <TextInput
@@ -683,6 +935,7 @@ export default function AdminEnhancedScreen() {
               <TouchableOpacity
                 style={[buttonStyles.primary, styles.submitButton]}
                 onPress={handleCreateTask}
+                disabled={!selectedEmployee || !taskTitle}
               >
                 <Text style={buttonStyles.primaryText}>Create Task</Text>
               </TouchableOpacity>
@@ -706,9 +959,11 @@ const getPriorityColor = (priority: string) => {
 
 const getStatusColor = (status: string) => {
   switch (status) {
+    case 'approved': return '#4CAF50';
     case 'completed': return '#4CAF50';
     case 'in-progress': return '#2196F3';
     case 'pending': return '#FFA726';
+    case 'rejected': return '#FF6B6B';
     case 'cancelled': return '#FF6B6B';
     default: return '#999';
   }
@@ -779,11 +1034,53 @@ const styles = StyleSheet.create({
   },
   section: {
     padding: 16,
+    paddingBottom: 100,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 24,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: '45%',
+    padding: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    marginTop: 12,
+  },
+  statLabel: {
+    fontSize: 14,
+    marginTop: 4,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 16,
+  },
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+    gap: 12,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  activitySubtitle: {
+    fontSize: 14,
   },
   emptyCard: {
     padding: 32,
@@ -798,10 +1095,16 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 12,
   },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   cardTitle: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 4,
+    flex: 1,
   },
   cardSubtitle: {
     fontSize: 14,
@@ -816,6 +1119,27 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 8,
     marginBottom: 12,
+  },
+  fileLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 8,
+  },
+  fileName: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  statusText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
   cardActions: {
     flexDirection: 'row',
@@ -865,19 +1189,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
   },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  statusText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -920,15 +1231,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 16,
   },
+  employeeSelector: {
+    marginBottom: 8,
+  },
+  employeeChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginRight: 8,
+    borderWidth: 1,
+  },
+  employeeChipText: {
+    fontSize: 14,
+  },
   input: {
     borderWidth: 1,
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
     marginBottom: 8,
-  },
-  inputText: {
-    fontSize: 16,
   },
   textArea: {
     height: 100,
